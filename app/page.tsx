@@ -1,4 +1,4 @@
-git 'use client';
+ 'use client';
 import useScrollReveal from './components/useScrollReveal';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';

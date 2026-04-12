@@ -19,7 +19,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Animations */
 @keyframes reveal {
   from { opacity: 0; transform: translateY(30px); }
   to { opacity: 1; transform: translateY(0); }
@@ -40,30 +39,24 @@ body {
   100% { transform: scale(1); }
 }
 
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(40px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Scroll reveal — add class 'scroll-reveal' to any element */
 .scroll-reveal {
   opacity: 1;
   transform: translateY(0);
   animation: reveal 0.7s ease-out both;
 }
 
+.animate-reveal {
+  animation: reveal 0.8s ease-out forwards;
+}
 
-/* Navbar */
 .nav-item {
   text-decoration: none;
   color: #4b5563;
   font-weight: 500;
   transition: color 0.2s ease;
-  position: relative;
 }
 .nav-item:hover { color: var(--primary-red); }
 
-/* Buttons */
 .btn-red {
   background: var(--primary-red);
   color: white;
@@ -98,7 +91,6 @@ body {
   transform: translateY(-2px);
 }
 
-/* Cards */
 .glass-card {
   background: #ffffff;
   border: 1px solid #f1f5f9;
@@ -110,7 +102,6 @@ body {
   box-shadow: 0 20px 40px rgba(0,0,0,0.06);
 }
 
-/* Badge */
 .badge-red {
   display: inline-flex;
   align-items: center;
@@ -136,7 +127,6 @@ body {
   animation: heartbeat 1.8s ease-in-out infinite;
 }
 
-/* Mono icons */
 .mono-icon {
   width: 52px;
   height: 52px;
@@ -145,7 +135,24 @@ body {
   filter: grayscale(1) contrast(1.2) brightness(1.1);
 }
 
-/* Animate reveal on load */
-.animate-reveal {
-  animation: reveal 0.8s ease-out forwards;
+/* Nav */
+.nav-desktop { display: flex; }
+.nav-mobile { display: none !important; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .nav-desktop { display: none !important; }
+  .nav-mobile { display: flex !important; }
+
+  nav { padding: 0 20px !important; }
+  section { padding: 60px 20px !important; }
+  h1 { font-size: 40px !important; letter-spacing: -2px !important; }
+  h2 { font-size: 26px !important; }
+
+  footer {
+    flex-direction: column !important;
+    gap: 12px !important;
+    text-align: center !important;
+    padding: 32px 20px !important;
+  }
 }

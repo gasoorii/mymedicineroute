@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '../lib/supabase';
 
 export default function JoinPage() {
   const [role, setRole] = useState<'student' | 'mentor'>('student');
@@ -15,7 +14,7 @@ export default function JoinPage() {
     school: '',
     grade: '',
     interest: '',
-    role: '',
+    roleTitle: '',
     institution: '',
     hours: '',
     why: '',
@@ -29,11 +28,25 @@ export default function JoinPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await addDoc(collection(db, role === 'student' ? 'students' : 'mentors'), {
-        ...form,
-        role,
-        createdAt: serverTimestamp(),
-      });
+      if (role === 'student') {
+        await supabase.from('students').insert({
+          full_name: form.fullName,
+          email: form.email,
+          school: form.school,
+          grade: form.grade,
+          interest: form.interest,
+          why: form.why,
+        });
+      } else {
+        await supabase.from('mentors').insert({
+          full_name: form.fullName,
+          email: form.email,
+          role: form.roleTitle,
+          institution: form.institution,
+          hours: form.hours,
+          why: form.why,
+        });
+      }
       setSubmitted(true);
     } catch (err) {
       alert('Something went wrong. Please try again.');
@@ -67,8 +80,11 @@ export default function JoinPage() {
   return (
     <main style={{ minHeight: '100vh', background: '#fafaf8' }}>
 
-      {/* Header */}
-      <div style={{ background: 'radial-gradient(circle at 30% 50%, #2a0810 0%, #0d0d0d 70%)', padding: '60px 24px 80px', textAlign: 'center' }}>
+      <div style={{
+        background: 'radial-gradient(circle at 30% 50%, #2a0810 0%, #0d0d0d 70%)',
+        padding: '60px 24px 80px',
+        textAlign: 'center'
+      }}>
         <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', marginBottom: '40px' }}>
           <div style={{ width: '8px', height: '20px', background: '#E11D48', borderRadius: '2px' }} />
           <span style={{ fontWeight: 800, fontSize: '16px', color: '#fff' }}>My Medicine Route</span>
@@ -81,11 +97,9 @@ export default function JoinPage() {
         </p>
       </div>
 
-      {/* Form card */}
       <div style={{ maxWidth: '600px', margin: '-40px auto 80px', padding: '0 24px' }}>
         <div style={{ background: '#fff', borderRadius: '24px', padding: '48px', border: '1px solid #f1f5f9', boxShadow: '0 8px 40px rgba(0,0,0,0.06)' }}>
 
-          {/* Role toggle */}
           <div style={{ display: 'flex', background: '#f8f8f6', borderRadius: '12px', padding: '4px', marginBottom: '40px' }}>
             {(['student', 'mentor'] as const).map(r => (
               <button
@@ -105,8 +119,6 @@ export default function JoinPage() {
           </div>
 
           <form onSubmit={submit}>
-
-            {/* Shared fields */}
             <div style={{ display: 'grid', gap: '20px' }}>
 
               <div>
@@ -119,14 +131,12 @@ export default function JoinPage() {
                 <input name="email" type="email" required onChange={handle} style={inputStyle} placeholder="your@email.com" />
               </div>
 
-              {/* Student fields */}
               {role === 'student' && (
                 <>
                   <div>
                     <label style={labelStyle}>School</label>
                     <input name="school" required onChange={handle} style={inputStyle} placeholder="Your school name" />
                   </div>
-
                   <div>
                     <label style={labelStyle}>Grade</label>
                     <select name="grade" required onChange={handle} style={inputStyle}>
@@ -136,7 +146,6 @@ export default function JoinPage() {
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label style={labelStyle}>Area of interest in medicine</label>
                     <select name="interest" required onChange={handle} style={inputStyle}>
@@ -146,7 +155,6 @@ export default function JoinPage() {
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label style={labelStyle}>Why do you want to join?</label>
                     <textarea name="why" required onChange={handle} rows={4} style={{ ...inputStyle, resize: 'none' }} placeholder="Tell us what drives your interest in medical research..." />
@@ -154,19 +162,16 @@ export default function JoinPage() {
                 </>
               )}
 
-              {/* Mentor fields */}
               {role === 'mentor' && (
                 <>
                   <div>
                     <label style={labelStyle}>Current role</label>
-                    <input name="role" required onChange={handle} style={inputStyle} placeholder="e.g. Medical student, Doctor, Researcher" />
+                    <input name="roleTitle" required onChange={handle} style={inputStyle} placeholder="e.g. Medical student, Doctor, Researcher" />
                   </div>
-
                   <div>
                     <label style={labelStyle}>Institution</label>
                     <input name="institution" required onChange={handle} style={inputStyle} placeholder="e.g. University, Hospital, Clinic..." />
                   </div>
-
                   <div>
                     <label style={labelStyle}>Hours available per week</label>
                     <select name="hours" required onChange={handle} style={inputStyle}>
@@ -176,7 +181,6 @@ export default function JoinPage() {
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label style={labelStyle}>Why do you want to mentor?</label>
                     <textarea name="why" required onChange={handle} rows={4} style={{ ...inputStyle, resize: 'none' }} placeholder="Tell us what motivates you to guide the next generation..." />
@@ -202,10 +206,8 @@ export default function JoinPage() {
 
             </div>
           </form>
-
         </div>
       </div>
-
     </main>
   );
 }
@@ -216,7 +218,6 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 700,
   color: '#0d0d0d',
   marginBottom: '8px',
-  letterSpacing: '0.01em',
 };
 
 const inputStyle: React.CSSProperties = {
@@ -229,5 +230,4 @@ const inputStyle: React.CSSProperties = {
   background: '#fafaf8',
   outline: 'none',
   fontFamily: "'Inter', sans-serif",
-  transition: 'border-color 0.2s',
 };

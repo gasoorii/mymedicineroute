@@ -12,8 +12,8 @@ export default function OurGoal() {
     }}>
       <FallingPattern
         color="rgba(225,29,72,0.85)"
-        blurIntensity="0.3em"
-        duration={300}
+  blurIntensity="0.3em"
+  duration={600}
       />
       <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
         <p className="sr" style={{ fontSize: '14px', fontWeight: 700, color: '#E11D48', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '16px' }}>Our Goal</p>

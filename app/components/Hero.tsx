@@ -32,7 +32,7 @@ export default function Hero() {
           }}>
             Connect with expert mentors to conduct real, guided research projects — designed for high school students, built for the future.
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+          <div className="hero-btns" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
             <a href="/join" className="btn-red" style={{ padding: '18px 40px', fontSize: '16px' }}>Join as Student</a>
             <a href="/join" className="btn-ghost" style={{ padding: '18px 40px', fontSize: '16px' }}>Become a Mentor</a>
           </div>

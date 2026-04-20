@@ -1,0 +1,2197 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+AGENTS.md
+app/components/CTA.tsx
+app/components/ECGSection.tsx
+app/components/FallingPattern.tsx
+app/components/Footer.tsx
+app/components/Hero.tsx
+app/components/Navbar.tsx
+app/components/OurGoal.tsx
+app/components/Safety.tsx
+app/components/useScrollReveal.ts
+app/components/Waves.tsx
+app/components/WhatWeDo.tsx
+app/components/WhyItMatters.tsx
+app/favicon.ico
+app/globals.css
+app/join/page.tsx
+app/layout.tsx
+app/lib/supabase.ts
+app/lib/utils.ts
+app/page.tsx
+CLAUDE.md
+eslint.config.mjs
+next.config.ts
+package.json
+postcss.config.mjs
+public/file.svg
+public/first_aid_kit_mono_transparent.png
+public/folder_mono_transparent.png
+public/globe.svg
+public/graduation_hat_mono_transparent.png
+public/handshake_mono_transparent.png
+public/heart_transparent.gif
+public/microscope_mono_transparent.png
+public/next.svg
+public/stethoscope_transparent.png
+public/vercel.svg
+public/window.svg
+README.md
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="AGENTS.md">
+<!-- BEGIN:nextjs-agent-rules -->
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+<!-- END:nextjs-agent-rules -->
+</file>
+
+<file path="app/components/Waves.tsx">
+'use client'
+import * as React from 'react'
+import { useEffect, useRef } from 'react'
+import { createNoise2D } from 'simplex-noise'
+
+interface Point {
+  x: number; y: number
+  wave: { x: number; y: number }
+  cursor: { x: number; y: number; vx: number; vy: number }
+}
+
+interface WavesProps {
+  strokeColor?: string
+  backgroundColor?: string
+}
+
+export function Waves({ strokeColor = 'rgba(225,29,72,0.15)', backgroundColor = 'transparent' }: WavesProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
+  const mouseRef = useRef({ x: -10, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, v: 0, vs: 0, a: 0, set: false })
+  const pathsRef = useRef<SVGPathElement[]>([])
+  const linesRef = useRef<Point[][]>([])
+  const noiseRef = useRef<((x: number, y: number) => number) | null>(null)
+  const rafRef = useRef<number | null>(null)
+  const boundingRef = useRef<DOMRect | null>(null)
+
+  useEffect(() => {
+    if (!containerRef.current || !svgRef.current) return
+    noiseRef.current = createNoise2D()
+    setSize(); setLines()
+    window.addEventListener('resize', onResize)
+    window.addEventListener('mousemove', onMouseMove)
+    containerRef.current.addEventListener('touchmove', onTouchMove, { passive: false })
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('mousemove', onMouseMove)
+      containerRef.current?.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [])
+
+  const setSize = () => {
+    if (!containerRef.current || !svgRef.current) return
+    boundingRef.current = containerRef.current.getBoundingClientRect()
+    const { width, height } = boundingRef.current
+    svgRef.current.style.width = `${width}px`
+    svgRef.current.style.height = `${height}px`
+  }
+
+  const setLines = () => {
+    if (!svgRef.current || !boundingRef.current) return
+    const { width, height } = boundingRef.current
+    linesRef.current = []
+    pathsRef.current.forEach(p => p.remove())
+    pathsRef.current = []
+    const xGap = 8; const yGap = 8
+    const oWidth = width + 200; const oHeight = height + 30
+    const totalLines = Math.ceil(oWidth / xGap)
+    const totalPoints = Math.ceil(oHeight / yGap)
+    const xStart = (width - xGap * totalLines) / 2
+    const yStart = (height - yGap * totalPoints) / 2
+    for (let i = 0; i < totalLines; i++) {
+      const points: Point[] = []
+      for (let j = 0; j < totalPoints; j++) {
+        points.push({ x: xStart + xGap * i, y: yStart + yGap * j, wave: { x: 0, y: 0 }, cursor: { x: 0, y: 0, vx: 0, vy: 0 } })
+      }
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      path.setAttribute('fill', 'none')
+      path.setAttribute('stroke', strokeColor)
+      path.setAttribute('stroke-width', '1')
+      svgRef.current.appendChild(path)
+      pathsRef.current.push(path)
+      linesRef.current.push(points)
+    }
+  }
+
+  const onResize = () => { setSize(); setLines() }
+  const onMouseMove = (e: MouseEvent) => updateMousePosition(e.pageX, e.pageY)
+  const onTouchMove = (e: TouchEvent) => { e.preventDefault(); updateMousePosition(e.touches[0].clientX, e.touches[0].clientY) }
+
+  const updateMousePosition = (x: number, y: number) => {
+    if (!boundingRef.current) return
+    const mouse = mouseRef.current
+    mouse.x = x - boundingRef.current.left
+    mouse.y = y - boundingRef.current.top + window.scrollY
+    if (!mouse.set) { mouse.sx = mouse.x; mouse.sy = mouse.y; mouse.lx = mouse.x; mouse.ly = mouse.y; mouse.set = true }
+    if (containerRef.current) {
+      containerRef.current.style.setProperty('--x', `${mouse.sx}px`)
+      containerRef.current.style.setProperty('--y', `${mouse.sy}px`)
+    }
+  }
+
+  const movePoints = (time: number) => {
+    const noise = noiseRef.current; if (!noise) return
+    const mouse = mouseRef.current
+    linesRef.current.forEach(points => {
+      points.forEach(p => {
+        const move = noise((p.x + time * 0.008) * 0.003, (p.y + time * 0.003) * 0.002) * 8
+        p.wave.x = Math.cos(move) * 12; p.wave.y = Math.sin(move) * 6
+        const dx = p.x - mouse.sx; const dy = p.y - mouse.sy
+        const d = Math.hypot(dx, dy); const l = Math.max(175, mouse.vs)
+        if (d < l) {
+          const s = 1 - d / l; const f = Math.cos(d * 0.001) * s
+          p.cursor.vx += Math.cos(mouse.a) * f * l * mouse.vs * 0.00035
+          p.cursor.vy += Math.sin(mouse.a) * f * l * mouse.vs * 0.00035
+        }
+        p.cursor.vx += (0 - p.cursor.x) * 0.01; p.cursor.vy += (0 - p.cursor.y) * 0.01
+        p.cursor.vx *= 0.95; p.cursor.vy *= 0.95
+        p.cursor.x += p.cursor.vx; p.cursor.y += p.cursor.vy
+        p.cursor.x = Math.min(50, Math.max(-50, p.cursor.x))
+        p.cursor.y = Math.min(50, Math.max(-50, p.cursor.y))
+      })
+    })
+  }
+
+  const moved = (point: Point, withCursor = true) => ({
+    x: point.x + point.wave.x + (withCursor ? point.cursor.x : 0),
+    y: point.y + point.wave.y + (withCursor ? point.cursor.y : 0),
+  })
+
+  const drawLines = () => {
+    linesRef.current.forEach((points, i) => {
+      if (points.length < 2 || !pathsRef.current[i]) return
+      const first = moved(points[0], false)
+      let d = `M ${first.x} ${first.y}`
+      for (let j = 1; j < points.length; j++) {
+        const c = moved(points[j]); d += `L ${c.x} ${c.y}`
+      }
+      pathsRef.current[i].setAttribute('d', d)
+    })
+  }
+
+const tick = (time: number) => {
+  const mouse = mouseRef.current
+  mouse.sx += (mouse.x - mouse.sx) * 0.1; mouse.sy += (mouse.y - mouse.sy) * 0.1
+  const dx = mouse.x - mouse.lx; const dy = mouse.y - mouse.ly
+  mouse.v = Math.hypot(dx, dy)
+  mouse.vs += (mouse.v - mouse.vs) * 0.1; mouse.vs = Math.min(100, mouse.vs)
+  mouse.lx = mouse.x; mouse.ly = mouse.y; mouse.a = Math.atan2(dy, dx)
+  if (containerRef.current) {
+    containerRef.current.style.setProperty('--x', `${mouse.sx}px`)
+    containerRef.current.style.setProperty('--y', `${mouse.sy}px`)
+  }
+  movePoints(time); drawLines()
+  rafRef.current = requestAnimationFrame(tick)
+}
+
+return (
+    <div ref={containerRef} style={{
+      backgroundColor,
+      position: 'absolute', top: 0, left: 0,
+      width: '100%', height: '100%',
+      overflow: 'hidden',
+      pointerEvents: 'none',
+      zIndex: 0,
+    }}>
+        <svg ref={svgRef} style={{ display: 'block', width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg" />
+      </div>
+    )
+  }
+</file>
+
+<file path="app/layout.tsx">
+import { Inter } from 'next/font/google'
+import './globals.css' // This works automatically in app/layout.tsx
+
+const inter = Inter({ subsets: ['latin'] })
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
+    </html>
+  )
+}
+</file>
+
+<file path="app/lib/supabase.ts">
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+</file>
+
+<file path="app/lib/utils.ts">
+// app/lib/utils.ts
+import { type ClassValue, clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+</file>
+
+<file path="CLAUDE.md">
+@AGENTS.md
+</file>
+
+<file path="eslint.config.mjs">
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
+
+export default eslintConfig;
+</file>
+
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+};
+
+export default nextConfig;
+</file>
+
+<file path="postcss.config.mjs">
+const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+
+export default config;
+</file>
+
+<file path="public/file.svg">
+<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
+</file>
+
+<file path="public/globe.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
+</file>
+
+<file path="public/next.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
+</file>
+
+<file path="public/vercel.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+</file>
+
+<file path="public/window.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+.aider*
+.env*.local
+</file>
+
+<file path="app/components/FallingPattern.tsx">
+'use client';
+import { motion } from 'framer-motion';
+
+type FallingPatternProps = {
+  color?: string;
+  backgroundColor?: string;
+  duration?: number;
+  blurIntensity?: string;
+  density?: number;
+  style?: React.CSSProperties;
+};
+
+export function FallingPattern({
+  color = 'rgba(225,29,72,0.9)',
+  backgroundColor = 'transparent',
+  duration = 600,
+  blurIntensity = '0.3em',
+  density = 1,
+  style,
+}: FallingPatternProps) {
+  const generateBackgroundImage = () => {
+    const patterns = [
+      `radial-gradient(4px 100px at 0px 235px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 235px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 117.5px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 252px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 252px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 126px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 150px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 150px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 75px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 253px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 253px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 126.5px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 204px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 204px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 102px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 134px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 134px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 67px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 179px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 179px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 89.5px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 299px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 299px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 149.5px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 215px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 215px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 107.5px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 281px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 281px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 140.5px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 158px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 158px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 79px, ${color} 100%, transparent 150%)`,
+      `radial-gradient(4px 100px at 0px 210px, ${color}, transparent)`,
+      `radial-gradient(4px 100px at 300px 210px, ${color}, transparent)`,
+      `radial-gradient(1.5px 1.5px at 150px 105px, ${color} 100%, transparent 150%)`,
+    ];
+    return patterns.join(', ');
+  };
+
+  const backgroundSizes = '300px 235px, 300px 235px, 300px 235px, 300px 252px, 300px 252px, 300px 252px, 300px 150px, 300px 150px, 300px 150px, 300px 253px, 300px 253px, 300px 253px, 300px 204px, 300px 204px, 300px 204px, 300px 134px, 300px 134px, 300px 134px, 300px 179px, 300px 179px, 300px 179px, 300px 299px, 300px 299px, 300px 299px, 300px 215px, 300px 215px, 300px 215px, 300px 281px, 300px 281px, 300px 281px, 300px 158px, 300px 158px, 300px 158px, 300px 210px, 300px 210px, 300px 210px';
+  const startPositions = '0px 220px, 3px 220px, 151.5px 337.5px, 25px 24px, 28px 24px, 176.5px 150px, 50px 16px, 53px 16px, 201.5px 91px, 75px 224px, 78px 224px, 226.5px 230.5px, 100px 19px, 103px 19px, 251.5px 121px, 125px 120px, 128px 120px, 276.5px 187px, 150px 31px, 153px 31px, 301.5px 120.5px, 175px 235px, 178px 235px, 326.5px 384.5px, 200px 121px, 203px 121px, 351.5px 228.5px, 225px 224px, 228px 224px, 376.5px 364.5px, 250px 26px, 253px 26px, 401.5px 105px, 275px 75px, 278px 75px, 426.5px 180px';
+  const endPositions = '0px 6800px, 3px 6800px, 151.5px 6917.5px, 25px 13632px, 28px 13632px, 176.5px 13758px, 50px 5416px, 53px 5416px, 201.5px 5491px, 75px 17175px, 78px 17175px, 226.5px 17301.5px, 100px 5119px, 103px 5119px, 251.5px 5221px, 125px 8428px, 128px 8428px, 276.5px 8495px, 150px 9876px, 153px 9876px, 301.5px 9965.5px, 175px 13391px, 178px 13391px, 326.5px 13540.5px, 200px 14741px, 203px 14741px, 351.5px 14848.5px, 225px 18770px, 228px 18770px, 376.5px 18910.5px, 250px 5082px, 253px 5082px, 401.5px 5161px, 275px 6375px, 278px 6375px, 426.5px 6480px';
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      zIndex: 0,
+      pointerEvents: 'none',
+      ...style,
+    }}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        style={{ width: '100%', height: '100%' }}
+      >
+        <motion.div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: generateBackgroundImage(),
+            backgroundSize: backgroundSizes,
+            backgroundRepeat: 'repeat',
+            willChange: 'background-position',
+          }}
+          variants={{
+            initial: { backgroundPosition: startPositions },
+            animate: {
+              backgroundPosition: [startPositions, endPositions],
+              transition: { duration, ease: 'linear', repeat: Infinity },
+            },
+          }}
+          initial="initial"
+          animate="animate"
+        />
+      </motion.div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/Footer.tsx">
+export default function Footer() {
+  return (
+    <footer style={{
+      padding: '48px 64px', display: 'flex', justifyContent: 'space-between',
+      alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)',
+      fontSize: '14px', color: '#94a3b8',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ width: '8px', height: '16px', background: '#E11D48', borderRadius: '2px' }} />
+        <span style={{ fontWeight: 800, color: '#f1f5f9' }}>My Medicine Route</span>
+      </div>
+      <span>Founded by Gasser · Bahrain · 2025</span>
+      <a href="mailto:mymedicineroute@gmail.com" style={{ color: 'inherit', textDecoration: 'none' }}>
+        mymedicineroute@gmail.com
+      </a>
+    </footer>
+  );
+}
+</file>
+
+<file path="app/components/Hero.tsx">
+'use client';
+import { Waves } from './Waves';
+
+export default function Hero() {
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden' }}>
+      <Waves strokeColor="rgba(225,29,72,0.2)" backgroundColor="transparent" />
+      <section style={{
+        textAlign: 'center',
+        padding: '120px 24px 100px',
+        maxWidth: '900px',
+        margin: '0 auto',
+        position: 'relative',
+        zIndex: 1,
+      }}>
+        <div className="animate-reveal">
+          <div className="badge-red" style={{ marginBottom: '32px' }}>
+            <span className="pulse-dot" />
+            Student-Founded · Bahrain
+          </div>
+          <h1 style={{
+            fontSize: '76px', fontWeight: 800, lineHeight: 1,
+            letterSpacing: '-4px', marginBottom: '32px', color: '#f1f5f9',
+          }}>
+            Your route into{' '}
+            <span style={{ color: '#E11D48' }}>medical research</span>
+            {' '}starts here
+          </h1>
+          <p style={{
+            fontSize: '21px', color: '#94a3b8', lineHeight: 1.6,
+            maxWidth: '620px', margin: '0 auto 48px', fontWeight: 400,
+          }}>
+            Connect with expert mentors to conduct real, guided research projects — designed for high school students, built for the future.
+          </p>
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+            <a href="/join" className="btn-red" style={{ padding: '18px 40px', fontSize: '16px' }}>Join as Student</a>
+            <a href="/join" className="btn-ghost" style={{ padding: '18px 40px', fontSize: '16px' }}>Become a Mentor</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/useScrollReveal.ts">
+'use client';
+import { useEffect } from 'react';
+
+export default function useScrollReveal() {
+  useEffect(() => {
+    const elements = document.querySelectorAll('.sr');
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      },
+      { threshold: 0.05 }
+    );
+    elements.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+}
+</file>
+
+<file path="app/join/page.tsx">
+'use client';
+
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
+
+export default function JoinPage() {
+  const [role, setRole] = useState<'student' | 'mentor'>('student');
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [form, setForm] = useState({
+    fullName: '',
+    email: '',
+    school: '',
+    grade: '',
+    interest: '',
+    roleTitle: '',
+    institution: '',
+    hours: '',
+    why: '',
+  });
+
+  const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (role === 'student') {
+        await supabase.from('students').insert({
+          full_name: form.fullName,
+          email: form.email,
+          school: form.school,
+          grade: form.grade,
+          interest: form.interest,
+          why: form.why,
+        });
+      } else {
+        await supabase.from('mentors').insert({
+          full_name: form.fullName,
+          email: form.email,
+          role: form.roleTitle,
+          institution: form.institution,
+          hours: form.hours,
+          why: form.why,
+        });
+      }
+      setSubmitted(true);
+    } catch (err) {
+      alert('Something went wrong. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  if (submitted) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafaf8' }}>
+        <div style={{ textAlign: 'center', padding: '60px 40px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '24px' }}>🎉</div>
+          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0d0d0d', marginBottom: '16px', letterSpacing: '-1px' }}>
+            You're in!
+          </h1>
+          <p style={{ fontSize: '17px', color: '#64748b', maxWidth: '400px', lineHeight: 1.6 }}>
+            Thanks for applying to My Medicine Route. We'll be in touch at <strong>{form.email}</strong> within a few days.
+          </p>
+          <a href="/" style={{
+            display: 'inline-block', marginTop: '40px',
+            background: '#E11D48', color: 'white', padding: '14px 32px',
+            borderRadius: '999px', textDecoration: 'none', fontWeight: 600, fontSize: '15px',
+          }}>
+            Back to home
+          </a>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main style={{ minHeight: '100vh', background: '#fafaf8' }}>
+
+      <div style={{
+        background: 'radial-gradient(circle at 30% 50%, #2a0810 0%, #0d0d0d 70%)',
+        padding: '60px 24px 80px',
+        textAlign: 'center'
+      }}>
+        <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', marginBottom: '40px' }}>
+          <div style={{ width: '8px', height: '20px', background: '#E11D48', borderRadius: '2px' }} />
+          <span style={{ fontWeight: 800, fontSize: '16px', color: '#fff' }}>My Medicine Route</span>
+        </a>
+        <h1 style={{ fontSize: '48px', fontWeight: 800, color: '#fff', letterSpacing: '-2px', marginBottom: '16px' }}>
+          Join the network
+        </h1>
+        <p style={{ fontSize: '17px', color: '#94a3b8', maxWidth: '480px', margin: '0 auto' }}>
+          Whether you're a student ready to research or a mentor ready to guide — there's a place for you here.
+        </p>
+      </div>
+
+      <div style={{ maxWidth: '600px', margin: '-40px auto 80px', padding: '0 24px' }}>
+        <div style={{ background: '#fff', borderRadius: '24px', padding: '48px', border: '1px solid #f1f5f9', boxShadow: '0 8px 40px rgba(0,0,0,0.06)' }}>
+
+          <div style={{ display: 'flex', background: '#f8f8f6', borderRadius: '12px', padding: '4px', marginBottom: '40px' }}>
+            {(['student', 'mentor'] as const).map(r => (
+              <button
+                key={r}
+                onClick={() => setRole(r)}
+                style={{
+                  flex: 1, padding: '12px', border: 'none', cursor: 'pointer',
+                  borderRadius: '10px', fontWeight: 700, fontSize: '14px',
+                  transition: 'all 0.2s',
+                  background: role === r ? '#E11D48' : 'transparent',
+                  color: role === r ? '#fff' : '#64748b',
+                }}
+              >
+                {r === 'student' ? 'I am a Student' : 'I am a Mentor'}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={submit}>
+            <div style={{ display: 'grid', gap: '20px' }}>
+
+              <div>
+                <label style={labelStyle}>Full name</label>
+                <input name="fullName" required onChange={handle} style={inputStyle} placeholder="Your full name" />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Email address</label>
+                <input name="email" type="email" required onChange={handle} style={inputStyle} placeholder="your@email.com" />
+              </div>
+
+              {role === 'student' && (
+                <>
+                  <div>
+                    <label style={labelStyle}>School</label>
+                    <input name="school" required onChange={handle} style={inputStyle} placeholder="Your school name" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Grade</label>
+                    <select name="grade" required onChange={handle} style={inputStyle}>
+                      <option value="">Select your grade</option>
+                      {['9', '10', '11', '12'].map(g => (
+                        <option key={g} value={g}>Grade {g}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Area of interest in medicine</label>
+                    <select name="interest" required onChange={handle} style={inputStyle}>
+                      <option value="">Select an area</option>
+                      {['General medicine', 'Surgery', 'Neurology', 'Cardiology', 'Oncology', 'Pediatrics', 'Public health', 'Research & data', 'Other'].map(i => (
+                        <option key={i} value={i}>{i}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Why do you want to join?</label>
+                    <textarea name="why" required onChange={handle} rows={4} style={{ ...inputStyle, resize: 'none' }} placeholder="Tell us what drives your interest in medical research..." />
+                  </div>
+                </>
+              )}
+
+              {role === 'mentor' && (
+                <>
+                  <div>
+                    <label style={labelStyle}>Current role</label>
+                    <input name="roleTitle" required onChange={handle} style={inputStyle} placeholder="e.g. Medical student, Doctor, Researcher" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Institution</label>
+                    <input name="institution" required onChange={handle} style={inputStyle} placeholder="e.g. University, Hospital, Clinic..." />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Hours available per week</label>
+                    <select name="hours" required onChange={handle} style={inputStyle}>
+                      <option value="">Select availability</option>
+                      {['Less than 1 hour', '1–2 hours', '2–4 hours', '4+ hours'].map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Why do you want to mentor?</label>
+                    <textarea name="why" required onChange={handle} rows={4} style={{ ...inputStyle, resize: 'none' }} placeholder="Tell us what motivates you to guide the next generation..." />
+                  </div>
+                </>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  background: loading ? '#f1f5f9' : '#E11D48',
+                  color: loading ? '#94a3b8' : '#fff',
+                  border: 'none', borderRadius: '999px',
+                  padding: '18px', fontSize: '16px', fontWeight: 700,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s', marginTop: '8px',
+                  boxShadow: loading ? 'none' : '0 4px 15px rgba(225,29,72,0.25)',
+                }}
+              >
+                {loading ? 'Submitting...' : role === 'student' ? 'Apply as Student →' : 'Apply as Mentor →'}
+              </button>
+
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '13px',
+  fontWeight: 700,
+  color: '#0d0d0d',
+  marginBottom: '8px',
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '14px 16px',
+  border: '1.5px solid #e8e6df',
+  borderRadius: '12px',
+  fontSize: '15px',
+  color: '#0d0d0d',
+  background: '#fafaf8',
+  outline: 'none',
+  fontFamily: "'Inter', sans-serif",
+};
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules"]
+}
+</file>
+
+<file path="app/components/CTA.tsx">
+'use client';
+
+import React, { useRef, useEffect } from 'react';
+import Link from 'next/link';
+
+const ArrowIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"></line>
+    <polyline points="12 5 19 12 12 19"></polyline>
+  </svg>
+);
+
+const OptimizedHolographicCard = () => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const requestRef = useRef<number | null>(null);
+  const mouseCoords = useRef({ x: 0, y: 0, active: false });
+
+  const updateStyles = () => {
+    if (!cardRef.current || !mouseCoords.current.active) return;
+
+    const card = cardRef.current;
+    const rect = card.getBoundingClientRect();
+    const { x, y } = mouseCoords.current;
+
+    const localX = x - rect.left;
+    const localY = y - rect.top;
+
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const rotateX = (localY - centerY) / 20;
+    const rotateY = (centerX - localX) / 20;
+
+    card.style.setProperty('--x', `${localX}px`);
+    card.style.setProperty('--y', `${localY}px`);
+    card.style.setProperty('--bg-x', `${(localX / rect.width) * 100}%`);
+    card.style.setProperty('--bg-y', `${(localY / rect.height) * 100}%`);
+    card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(0)`;
+
+    requestRef.current = requestAnimationFrame(updateStyles);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, []);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    mouseCoords.current = { x: e.clientX, y: e.clientY, active: true };
+    if (!requestRef.current) {
+      requestRef.current = requestAnimationFrame(updateStyles);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    mouseCoords.current.active = false;
+    if (requestRef.current) {
+      cancelAnimationFrame(requestRef.current);
+      requestRef.current = null;
+    }
+
+    if (cardRef.current) {
+      const card = cardRef.current;
+      card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0)';
+      card.style.setProperty('--bg-x', '50%');
+      card.style.setProperty('--bg-y', '50%');
+    }
+  };
+
+  return (
+    <>
+      <style>{`
+        .holo-container {
+          position: relative;
+          background: rgba(255, 255, 255, 0.015);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 40px;
+          padding: 80px 40px;
+          overflow: hidden;
+          will-change: transform;
+          transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+          cursor: pointer;
+          backdrop-filter: blur(10px);
+        }
+        .holo-container::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(
+            circle at var(--bg-x, 50%) var(--bg-y, 50%),
+            rgba(225, 29, 72, 0.15) 0%,
+            transparent 60%
+          );
+          z-index: 0;
+          pointer-events: none;
+        }
+        .holo-shine {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          pointer-events: none;
+          background: radial-gradient(
+            circle at var(--x, 50%) var(--y, 50%),
+            rgba(255, 255, 255, 0.05) 0%,
+            transparent 40%
+          );
+        }
+        .cta-btn:hover {
+          transform: scale(1.05);
+          box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+      `}</style>
+
+      <div
+        className="holo-container"
+        ref={cardRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div className="holo-shine" />
+        
+        <div style={{ position: 'relative', zIndex: 2, textAlign: 'center' }}>
+          <p style={{ fontSize: '13px', fontWeight: 800, color: '#E11D48', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '24px' }}>
+            Enrollment is open
+          </p>
+          <h2 style={{ fontSize: '48px', fontWeight: 800, color: '#fff', letterSpacing: '-2px', marginBottom: '24px', lineHeight: 1.1 }}>
+            What are you waiting for?
+          </h2>
+          <p style={{ fontSize: '18px', color: '#94a3b8', maxWidth: '520px', margin: '0 auto 48px', lineHeight: 1.6 }}>
+            Access real projects, expert mentors, and a community built for the next generation of doctors.
+          </p>
+          
+          <Link href="/join" style={{ textDecoration: 'none' }}>
+            <button className="cta-btn" style={{
+              background: '#fff',
+              color: '#000',
+              padding: '18px 36px',
+              borderRadius: '999px',
+              fontSize: '16px',
+              fontWeight: 700,
+              border: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.3s cubic-bezier(0.23, 1, 0.32, 1)'
+            }}>
+              Get Started
+              <div style={{ background: 'rgba(0,0,0,0.06)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ArrowIcon />
+              </div>
+            </button>
+          </Link>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default function CTASection() {
+  return (
+    <section id="cta" style={{ 
+      background: '#121315', // Premium Matte Grey
+      padding: '140px 64px', 
+      position: 'relative', 
+      overflow: 'hidden' 
+    }}>
+      
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+        width: '900px', height: '900px', 
+        background: 'radial-gradient(circle, rgba(225, 29, 72, 0.06) 0%, transparent 70%)',
+        zIndex: 0, pointerEvents: 'none'
+      }} />
+
+      <div style={{
+        position: 'absolute', top: '0%', right: '10%',
+        width: '600px', height: '600px', 
+        background: 'radial-gradient(circle, rgba(225, 29, 72, 0.03) 0%, transparent 60%)',
+        zIndex: 0, pointerEvents: 'none'
+      }} />
+
+      <div style={{ maxWidth: '1000px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        <OptimizedHolographicCard />
+      </div>
+    </section>
+  );
+}
+</file>
+
+<file path="app/components/ECGSection.tsx">
+'use client';
+import { useEffect, useRef, useState } from 'react';
+
+function ECGCanvas({ isVisible }: { isVisible: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+if (!ctx) return;
+
+    const resize = () => {
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+      canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    };
+    resize();
+
+    const W = canvas.offsetWidth;
+    const H = canvas.offsetHeight;
+    const midY = H / 2;
+
+    const points = new Array(Math.floor(W)).fill(midY);
+    let scanX = 0;
+    const speed = 4;
+
+    let isBeating = false;
+    let beatPhase = 0;
+    let cooldown = 50;
+    let currentBeatType = 0;
+    let currentQRS = 110;
+
+    function getPulseY(): number {
+      let yOffset = 0;
+      if (!isBeating) {
+        cooldown--;
+        if (cooldown <= 0) {
+          isBeating = true;
+          beatPhase = 0;
+          currentBeatType = Math.floor(Math.random() * 3);
+          currentQRS = 100 + Math.random() * 40;
+          cooldown = 80 + Math.random() * 100;
+        }
+      } else {
+        beatPhase += 0.015;
+        const p = beatPhase;
+        if (p < 0.1) {
+          yOffset = -Math.sin((p / 0.1) * Math.PI) * 8;
+        } else if (p > 0.15 && p < 0.5) {
+          const qrsP = (p - 0.15) / 0.35;
+          if (currentBeatType === 0) {
+            if (qrsP < 0.1) yOffset = qrsP * 40;
+            else if (qrsP < 0.3) yOffset = -currentQRS * ((qrsP - 0.1) / 0.2);
+            else if (qrsP < 0.7) yOffset = (currentQRS + 40) * ((qrsP - 0.3) / 0.4) - currentQRS;
+          } else if (currentBeatType === 1) {
+            if (qrsP < 0.2) yOffset = -(currentQRS + 30) * (qrsP / 0.2);
+            else if (qrsP < 0.5) yOffset = (currentQRS + 60) * ((qrsP - 0.2) / 0.3) - (currentQRS + 30);
+            else if (qrsP < 0.8) yOffset = -30 * ((qrsP - 0.5) / 0.3) + 30;
+          } else {
+            if (qrsP < 0.2) yOffset = -80;
+            else if (qrsP < 0.4) yOffset = -40;
+            else if (qrsP < 0.6) yOffset = -120;
+            else if (qrsP < 0.9) yOffset = 120 * ((qrsP - 0.6) / 0.3) - 120;
+          }
+        } else if (p > 0.6 && p < 0.95) {
+          const tP = (p - 0.6) / 0.35;
+          yOffset = -Math.sin(tP * Math.PI) * 22;
+        }
+        if (p >= 1) isBeating = false;
+      }
+      const noise = (Math.random() - 0.5) * 1.5;
+      return midY + yOffset + noise;
+    }
+
+    function draw() {
+      if (!ctx) return;
+
+      for (let i = 0; i < speed; i++) {
+        const x = Math.floor((scanX + i) % W);
+        points[x] = getPulseY();
+      }
+
+      ctx.clearRect(0, 0, W, H);
+
+      ctx.fillStyle = 'rgba(225, 29, 72, 0.12)';
+      for (let x = 0; x < W; x += 60) {
+        for (let y = 0; y < H; y += 60) {
+          ctx.fillRect(x, y, 1.5, 1.5);
+        }
+      }
+
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'butt';
+      ctx.lineJoin = 'miter';
+
+      for (let x = 1; x < W; x++) {
+        let age = scanX - x;
+        if (age < 0) age += W;
+        if (age > W - 25) continue;
+        const opacity = Math.pow(1 - age / W, 2.5);
+        if (opacity < 0.01) continue;
+
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(244, 63, 94, ${opacity})`;
+        if (age < 40) {
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = '#E11D48';
+        } else {
+          ctx.shadowBlur = 0;
+        }
+        ctx.moveTo(x - 1, points[x - 1]);
+        ctx.lineTo(x, points[x]);
+        ctx.stroke();
+      }
+
+      const headY = points[Math.floor(scanX)];
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#fff';
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(scanX - 2, headY - 5, 4, 10);
+
+      scanX = (scanX + speed) % W;
+      animRef.current = requestAnimationFrame(draw);
+    }
+
+    draw();
+    return () => cancelAnimationFrame(animRef.current);
+  }, [isVisible]);
+
+  return <canvas ref={canvasRef} style={{ width: '100%', height: '280px', display: 'block' }} />;
+}
+
+export default function ECGSection() {
+  const ecgRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+          } else {
+            setIsVisible(false);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    if (ecgRef.current) observer.observe(ecgRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section ref={ecgRef} style={{
+      background: 'radial-gradient(circle at center, #2a0707 0%, #050000 100%)',
+      padding: '30px 0',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      borderTop: '1px solid #330a0a',
+      borderBottom: '1px solid #330a0a'
+    }}>
+      <h2 style={{
+        color: '#ffffff',
+        textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+        fontSize: '14px',
+        fontWeight: 700,
+        letterSpacing: '4px',
+        textTransform: 'uppercase',
+        marginBottom: '10px',
+        textAlign: 'center',
+        fontFamily: 'monospace',
+        width: '100%',
+        zIndex: 10
+      }}>
+        The Best Future Starts with a Better Connection
+      </h2>
+
+      <div style={{ width: '100%', position: 'relative', maxWidth: '1800px' }}>
+        <ECGCanvas isVisible={isVisible} />
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: 'linear-gradient(to right, #050000 0%, transparent 10%, transparent 90%, #050000 100%)'
+        }} />
+      </div>
+    </section>
+  );
+}
+</file>
+
+<file path="app/components/Navbar.tsx">
+'use client';
+import { useState } from 'react';
+
+export default function Navbar() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const links = [
+    { label: 'Our Goal', href: '#our-goal' },
+    { label: 'Why it matters', href: '#why' },
+    { label: 'Safety', href: '#safety' },
+  ];
+
+  return (
+    <>
+      <nav style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0 64px',
+        height: '80px',
+        position: 'sticky',
+        top: 0,
+        background: 'rgba(24,25,27,0.92)',
+        backdropFilter: 'blur(15px)',
+        zIndex: 100,
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+          <div style={{ width: '10px', height: '24px', background: '#E11D48', borderRadius: '2px' }} />
+          <span style={{ fontWeight: 800, fontSize: '20px', color: '#f1f5f9', letterSpacing: '-0.5px' }}>
+            My Medicine Route
+          </span>
+        </a>
+
+        <div className="nav-desktop" style={{ display: 'flex', gap: '36px', fontSize: '14px', alignItems: 'center' }}>
+          {links.map(link => (
+            <a key={link.label} href={link.href} className="nav-item">{link.label}</a>
+          ))}
+        </div>
+
+        <div className="nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* ADDED THE MISSING <a TAG BELOW */}
+          <a 
+            href="https://instagram.com/mymedicineroute"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#E11D48')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+              <circle cx="12" cy="12" r="4"/>
+              <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+            </svg>
+          </a>
+          <a href="/join" className="btn-red" style={{ fontSize: '14px', padding: '10px 20px' }}>
+            Join Now →
+          </a>
+        </div>
+
+        <button
+          className="nav-mobile"
+          onClick={() => setMenuOpen(!menuOpen)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', flexDirection: 'column', gap: '5px', padding: '4px' }}
+        >
+          <span style={{ width: '24px', height: '2px', background: '#f1f5f9', borderRadius: '2px', display: 'block', transition: 'all 0.3s', transform: menuOpen ? 'rotate(45deg) translate(5px, 5px)' : 'none' }} />
+          <span style={{ width: '24px', height: '2px', background: '#f1f5f9', borderRadius: '2px', display: 'block', opacity: menuOpen ? 0 : 1, transition: 'all 0.3s' }} />
+          <span style={{ width: '24px', height: '2px', background: '#f1f5f9', borderRadius: '2px', display: 'block', transition: 'all 0.3s', transform: menuOpen ? 'rotate(-45deg) translate(5px, -5px)' : 'none' }} />
+        </button>
+      </nav>
+
+      {menuOpen && (
+        <div style={{
+          position: 'fixed', top: '80px', left: 0, right: 0,
+          background: '#18191b', zIndex: 99, padding: '32px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', flexDirection: 'column', gap: '24px',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+        }}>
+          {links.map(link => (
+            <a key={link.label} href={link.href} onClick={() => setMenuOpen(false)}
+              style={{ textDecoration: 'none', color: '#f1f5f9', fontWeight: 600, fontSize: '18px' }}>
+              {link.label}
+            </a>
+          ))}
+          <a href="https://instagram.com/mymedicineroute" target="_blank" rel="noopener noreferrer"
+            style={{ textDecoration: 'none', color: '#f1f5f9', fontWeight: 600, fontSize: '18px' }}>
+            Instagram
+          </a>
+          <a href="/join" className="btn-red" style={{ textAlign: 'center', padding: '16px', fontSize: '16px' }}>
+            Join Now →
+          </a>
+        </div>
+      )}
+    </>
+  );
+}
+</file>
+
+<file path="app/components/OurGoal.tsx">
+'use client';
+import { FallingPattern } from './FallingPattern';
+
+export default function OurGoal() {
+  return (
+    <section id="our-goal" style={{
+      background: '#1c1d1f',
+      padding: '100px 64px',
+      borderTop: '1px solid rgba(255,255,255,0.08)',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <FallingPattern
+        color="rgba(225,29,72,0.85)"
+  blurIntensity="0.3em"
+  duration={600}
+      />
+      <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+        <p className="sr" style={{ fontSize: '14px', fontWeight: 700, color: '#E11D48', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '16px' }}>Our Goal</p>
+        <h2 className="sr sr-delay-1" style={{ fontSize: '42px', fontWeight: 800, letterSpacing: '-1.5px', marginBottom: '20px', color: '#f1f5f9' }}>
+          Building the first student medical<br />research network in Bahrain
+        </h2>
+        <p className="sr sr-delay-2" style={{ fontSize: '18px', color: '#94a3b8', lineHeight: 1.7, maxWidth: '620px', margin: '0 auto 64px' }}>
+          My Medicine Route is a student-founded nonprofit with one mission — give every high schooler in Bahrain a real shot at medical research before university. No connections needed. No experience required.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+          {[
+            { num: '50+', label: 'Students involved', desc: 'High schoolers across Bahrain gaining real research experience', delay: 'sr-delay-2' },
+            { num: '5+', label: 'Projects completed', desc: 'Real studies published and documented in our archive', delay: 'sr-delay-3' },
+            { num: '3+', label: 'Schools reached', desc: 'Expanding across schools in Bahrain in our first year', delay: 'sr-delay-4' },
+          ].map(item => (
+            <div key={item.label} className={`sr ${item.delay}`} style={{
+              background: 'rgba(255,255,255,0.04)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: '20px',
+              padding: '36px 28px',
+              border: '1px solid rgba(255,255,255,0.08)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '48px', fontWeight: 800, color: '#E11D48', letterSpacing: '-2px', marginBottom: '8px' }}>{item.num}</div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9', marginBottom: '8px' }}>{item.label}</div>
+              <div style={{ fontSize: '13px', color: '#94a3b8', lineHeight: 1.6 }}>{item.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+</file>
+
+<file path="app/components/Safety.tsx">
+'use client';
+import { FallingPattern } from './FallingPattern';
+
+const LockIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M8 12l3 3 5-5"/>
+  </svg>
+);
+
+const ClipboardIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+    <rect x="9" y="3" width="6" height="4" rx="1"/>
+  </svg>
+);
+
+const BanIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+  </svg>
+);
+
+export default function Safety() {
+  const allowed = ['Survey-based studies', 'Literature reviews', 'Observational studies', 'Data analysis projects'];
+  const notAllowed = ['No lab experiments', 'No clinical interventions', 'No medical advice given', 'Anonymous data only'];
+  const rules = [
+    { icon: <LockIcon />, title: 'Anonymous data only', desc: 'All student research uses fully anonymized data. No personal information is ever collected or published.', delay: 'sr-delay-1' },
+    { icon: <CheckIcon />, title: 'Mentor approval required', desc: 'Every project must be reviewed and approved by a qualified medical mentor before any data is collected.', delay: 'sr-delay-2' },
+    { icon: <ClipboardIcon />, title: 'Consent required', desc: 'All study participants provide informed consent before being included in any research project.', delay: 'sr-delay-3' },
+    { icon: <BanIcon />, title: 'No experiments on people', desc: 'We do not conduct any clinical trials, physical experiments, or interventions of any kind.', delay: 'sr-delay-4' },
+  ];
+
+  return (
+    <section id="safety" style={{
+      background: '#1c1d1f',
+      padding: '100px 64px',
+      borderTop: '1px solid rgba(255,255,255,0.08)',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <FallingPattern
+        color="rgba(225,29,72,0.85)"
+        blurIntensity="0.3em"
+        duration={600}
+      />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        <p className="sr" style={{ fontSize: '14px', fontWeight: 700, color: '#E11D48', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'center', marginBottom: '16px' }}>Safety first</p>
+        <h2 className="sr sr-delay-1" style={{ fontSize: '42px', fontWeight: 800, textAlign: 'center', letterSpacing: '-1.5px', marginBottom: '16px', color: '#f1f5f9' }}>
+          Safe by design. Not an afterthought.
+        </h2>
+        <p className="sr sr-delay-2" style={{ fontSize: '18px', color: '#94a3b8', textAlign: 'center', maxWidth: '580px', margin: '0 auto 64px', lineHeight: 1.7 }}>
+          Every project on My Medicine Route operates within a strict, medically supervised scope. Here's exactly what that means.
+        </p>
+        <div className="sr sr-delay-1" style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '20px', padding: '36px', marginBottom: '32px', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Project types — safe scope only</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
+            {allowed.map(item => (
+              <span key={item} style={{ background: 'rgba(15,110,86,0.2)', color: '#4ade80', padding: '8px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 600, border: '1px solid rgba(74,222,128,0.2)' }}>{item}</span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {notAllowed.map(item => (
+              <span key={item} style={{ background: 'rgba(225,29,72,0.1)', color: '#f87171', padding: '8px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 600, border: '1px solid rgba(248,113,113,0.2)' }}>{item}</span>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          {rules.map(item => (
+            <div key={item.title} className={`sr ${item.delay} glass-card`} style={{ borderRadius: '16px', padding: '28px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '10px',
+                background: 'rgba(255,255,255,0.05)', // Subtle white/silver bg
+                border: '1px solid rgba(255,255,255,0.1)', // Subtle silver border
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#cbd5e1', // Light silver color for the icon stroke
+                flexShrink: 0,
+              }}>
+                {item.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: '#f1f5f9', marginBottom: '8px' }}>{item.title}</div>
+                <div style={{ fontSize: '14px', color: '#94a3b8', lineHeight: 1.6 }}>{item.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+</file>
+
+<file path="app/components/WhatWeDo.tsx">
+'use client';
+
+import React, { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+
+// 1. NEW: Minimalistic Research Flask (for Guided Projects)
+const ProjectIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16.3 3l-3.3 0" />
+    <path d="M9 3l6 0" />
+    <path d="M10 3v5.6a3 3 0 0 1-.8 2.1l-4.2 4.6a5 5 0 0 0 0 6.7h14a5 5 0 0 0 0-6.7l-4.2-4.6a3 3 0 0 1-.8-2.1V3" />
+    <path d="M7 15h10" />
+  </svg>
+);
+
+// 2. NEW: Minimalistic Stethoscope (for Expert Matching)
+const ExpertIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4.8 2.8C3.5 3.3 3 4.5 3 6c0 4 3 7 7 7h1c4 0 7-3 7-7 0-1.5-.5-2.7-1.8-3.2" />
+    <path d="M8 3v1" />
+    <path d="M16 3v1" />
+    <path d="M11 13v6a2 2 0 0 0 2 2h3.5" />
+    <circle cx="20" cy="21" r="1.5" />
+  </svg>
+);
+
+// 3. KEPT: Minimalistic Archive/Box (The one you liked)
+const ArchiveIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="21 8 21 21 3 21 3 8" />
+    <rect x="1" y="3" width="22" height="5" />
+    <line x1="10" y1="12" x2="14" y2="12" />
+  </svg>
+);
+
+function DottedSurface() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const SEPARATION = 120;
+    const AMOUNTX = 35;
+    const AMOUNTY = 45;
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      60,
+      containerRef.current.offsetWidth / containerRef.current.offsetHeight,
+      1,
+      10000,
+    );
+    camera.position.set(0, 200, 800);
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setSize(containerRef.current.offsetWidth, containerRef.current.offsetHeight);
+    renderer.setClearColor(0x000000, 0);
+
+    containerRef.current.appendChild(renderer.domElement);
+
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const geometry = new THREE.BufferGeometry();
+
+    for (let ix = 0; ix < AMOUNTX; ix++) {
+      for (let iy = 0; iy < AMOUNTY; iy++) {
+        positions.push(
+          ix * SEPARATION - (AMOUNTX * SEPARATION) / 2,
+          0,
+          iy * SEPARATION - (AMOUNTY * SEPARATION) / 2,
+        );
+        colors.push(220 / 255, 10 / 255, 10 / 255);
+      }
+    }
+
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    const material = new THREE.PointsMaterial({
+      size: 7,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.65,
+      sizeAttenuation: true,
+    });
+
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+
+    let count = 0;
+    let animationId: number;
+
+    let isVisible = true;
+    const visibilityObserver = new IntersectionObserver(
+      entries => { isVisible = entries[0].isIntersecting; },
+      { threshold: 0.1 }
+    );
+    visibilityObserver.observe(containerRef.current);
+
+    const animate = () => {
+      animationId = requestAnimationFrame(animate);
+      if (!isVisible) return;
+
+      const positionAttribute = geometry.attributes.position;
+      const pos = positionAttribute.array as Float32Array;
+
+      let i = 0;
+      for (let ix = 0; ix < AMOUNTX; ix++) {
+        for (let iy = 0; iy < AMOUNTY; iy++) {
+          pos[i * 3 + 1] =
+            Math.sin((ix + count) * 0.3) * 60 +
+            Math.sin((iy + count) * 0.5) * 60;
+          i++;
+        }
+      }
+
+      positionAttribute.needsUpdate = true;
+      renderer.render(scene, camera);
+      count += 0.04;
+    };
+
+    animate();
+
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      camera.aspect = containerRef.current.offsetWidth / containerRef.current.offsetHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(containerRef.current.offsetWidth, containerRef.current.offsetHeight);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      visibilityObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationId);
+      geometry.dispose();
+      material.dispose();
+      renderer.dispose();
+      if (containerRef.current && renderer.domElement) {
+        containerRef.current.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 0,
+      }}
+    />
+  );
+}
+
+export default function WhatWeDo() {
+  const items = [
+    { icon: <ProjectIcon />, title: 'Guided Projects', desc: 'Work on real survey-based studies and observational data. Move beyond textbooks into real science.', delay: 'sr-delay-1' },
+    { icon: <ExpertIcon />, title: 'Expert Matching', desc: 'Paired with medical professionals who review your methods and guide your data analysis journey.', delay: 'sr-delay-2' },
+    { icon: <ArchiveIcon />, title: 'Public Archive', desc: 'Your work is documented and published in our research archive, creating a professional portfolio.', delay: 'sr-delay-3' },
+  ];
+
+  return (
+    <section style={{
+      background: '#18191b',
+      padding: '100px 64px',
+      borderTop: '1px solid rgba(255,255,255,0.08)',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <DottedSurface />
+      <div style={{ maxWidth: '1100px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        <p className="sr" style={{ fontSize: '14px', fontWeight: 700, color: '#E11D48', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'center', marginBottom: '16px' }}>The Platform</p>
+        <h2 className="sr sr-delay-1" style={{ fontSize: '42px', fontWeight: 800, textAlign: 'center', marginBottom: '64px', letterSpacing: '-1.5px', color: '#f1f5f9' }}>
+          Real research experience.<br />Before university.
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
+          {items.map(item => (
+            <div key={item.title} className={`sr ${item.delay} glass-card`} style={{ borderRadius: '20px', padding: '32px' }}>
+              <div style={{ 
+                marginBottom: '24px', 
+                background: 'rgba(148, 163, 184, 0.1)', 
+                border: '1px solid rgba(148, 163, 184, 0.2)', 
+                color: '#cbd5e1', 
+                width: '64px', height: '64px', display: 'flex', 
+                alignItems: 'center', justifyContent: 'center', 
+                borderRadius: '16px' 
+              }}>
+                {item.icon}
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: '#f1f5f9' }}>{item.title}</div>
+              <div style={{ fontSize: '15px', color: '#94a3b8', lineHeight: 1.7 }}>{item.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+</file>
+
+<file path="app/components/WhyItMatters.tsx">
+'use client';
+
+import React, { useState, Suspense, lazy, useRef, useEffect } from 'react';
+
+// Minimalistic Silver Icon Components
+const DoorIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 3l14 0c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2h-14c-1.1 0-2-.9-2-2v-14c0-1.1.9-2 2-2z" />
+    <path d="M15 12l0 .01" strokeWidth="3" />
+  </svg>
+);
+
+const LinkIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+
+const FolderIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const CompassIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+  </svg>
+);
+
+const Dithering = lazy(() =>
+  import('@paper-design/shaders-react').then((mod) => ({ default: mod.Dithering }))
+);
+
+export default function WhyItMatters() {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => { setIsInView(entries[0].isIntersecting); },
+      { threshold: 0.1 }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const problems = [
+    { icon: <DoorIcon />, title: 'No entry point', desc: "Medical research is locked behind university doors. High schoolers with genuine passion have nowhere to start — no labs, no mentors, no structure.", delay: 'sr-delay-1' },
+    { icon: <LinkIcon />, title: 'No connections', desc: "Getting into research depends on who you know. Students without the right family connections or school resources are left completely behind.", delay: 'sr-delay-2' },
+    { icon: <FolderIcon />, title: 'No portfolio', desc: "When applying to medical school, students need proof of commitment. Without research experience, that proof simply doesn't exist.", delay: 'sr-delay-3' },
+    { icon: <CompassIcon />, title: 'No guidance', desc: "Even motivated students don't know where to start. The path into medicine feels opaque, overwhelming, and unfair.", delay: 'sr-delay-4' },
+  ];
+
+  return (
+    <section
+      id="why"
+      ref={sectionRef}
+      style={{
+        background: '#18191b',
+        padding: '100px 64px',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Suspense fallback={null}>
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: 'none',
+          opacity: 0.18,
+          mixBlendMode: 'screen',
+        }}>
+          <Dithering
+            colorBack="#00000000"
+            colorFront="#CC0020"
+            shape="warp"
+            type="4x4"
+            speed={!isInView ? 0 : isHovered ? 0.5 : 0.15}
+            style={{ width: '100%', height: '100%' }}
+            minPixelRatio={1}
+          />
+        </div>
+      </Suspense>
+
+      <div style={{ maxWidth: '1000px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        <p className="sr" style={{ fontSize: '13px', fontWeight: 700, color: '#E11D48', letterSpacing: '3px', textTransform: 'uppercase', textAlign: 'center', marginBottom: '20px' }}>Why it matters</p>
+        <h2 className="sr sr-delay-1" style={{ fontSize: '48px', fontWeight: 800, textAlign: 'center', letterSpacing: '-1.5px', marginBottom: '20px', color: '#f1f5f9' }}>
+          The system wasn't built for students like you
+        </h2>
+        <p className="sr sr-delay-2" style={{ fontSize: '19px', color: '#94a3b8', textAlign: 'center', maxWidth: '600px', margin: '0 auto 80px', lineHeight: 1.7 }}>
+          Every year, thousands of Bahraini students passionate about medicine hit the same invisible wall. My Medicine Route tears it down.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '80px' }}>
+          {problems.map(item => (
+            <div key={item.title} className={`sr ${item.delay} glass-card`} style={{
+              borderRadius: '24px', padding: '40px',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              backdropFilter: 'blur(20px)',
+            }}>
+              {/* Silver Styled Icon Container */}
+              <div style={{ 
+                width: '52px', 
+                height: '52px', 
+                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#cbd5e1', // Light Silver
+                marginBottom: '20px' 
+              }}>
+                {item.icon}
+              </div>
+              
+              <div style={{ fontSize: '20px', fontWeight: 700, color: '#f1f5f9', marginBottom: '12px' }}>{item.title}</div>
+              <div style={{ fontSize: '15px', color: '#94a3b8', lineHeight: 1.8 }}>{item.desc}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="sr sr-delay-2" style={{
+          background: 'rgba(0,0,0,0.4)',
+          borderRadius: '32px',
+          padding: '56px',
+          border: '1px solid rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(10px)',
+          backgroundImage: 'radial-gradient(circle at top right, #E11D4815 0%, transparent 60%)',
+          position: 'relative',
+        }}>
+          <p style={{ fontSize: '12px', fontWeight: 700, color: '#E11D48', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '20px' }}>How we fix it</p>
+          <h3 style={{ fontSize: '32px', fontWeight: 800, color: '#fff', letterSpacing: '-1px', marginBottom: '32px' }}>
+            My Medicine Route gives you the entry point you were never given
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '32px' }}>
+            {[
+              { label: 'Real projects', desc: 'Not textbook exercises. Real studies with real data.' },
+              { label: 'Real mentors', desc: 'Medical students and doctors guiding you every step.' },
+              { label: 'Real proof', desc: 'Published work you can show colleges and universities.' },
+            ].map(item => (
+              <div key={item.label} style={{ borderTop: '1px solid rgba(225,29,72,0.3)', paddingTop: '20px' }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '10px' }}>{item.label}</div>
+                <div style={{ fontSize: '14px', color: '#94a3b8', lineHeight: 1.7 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+</file>
+
+<file path="app/globals.css">
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --primary-red: #E11D48;
+  --primary-hover: #BE123C;
+  --soft-red: rgba(225,29,72,0.12);
+  --bg: #18191b;
+  --bg-section: #1c1d1f;
+  --bg-card: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.08);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  overflow-x: hidden;
+}
+
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(225, 29, 72, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+}
+
+@keyframes heartbeat {
+  0% { transform: scale(1); }
+  14% { transform: scale(1.06); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.04); }
+  70% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+.scroll-reveal {
+  opacity: 1;
+  transform: translateY(0);
+  animation: reveal 0.7s ease-out both;
+}
+
+.animate-reveal {
+  animation: reveal 0.8s ease-out forwards;
+}
+
+.nav-item {
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+.nav-item:hover { color: var(--primary-red); }
+
+.btn-red {
+  background: var(--primary-red);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(225, 29, 72, 0.25);
+  display: inline-block;
+}
+.btn-red:hover {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(225, 29, 72, 0.35);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-primary);
+  padding: 12px 24px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 700;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+}
+.btn-ghost:hover {
+  border-color: var(--primary-red);
+  color: var(--primary-red);
+  transform: translateY(-2px);
+}
+
+.glass-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-card:hover {
+  transform: translateY(-8px);
+  border-color: rgba(225, 29, 72, 0.3);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  background: rgba(255,255,255,0.06);
+}
+
+.badge-red {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(225,29,72,0.12);
+  color: var(--primary-red);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(225, 29, 72, 0.2);
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--primary-red);
+  border-radius: 50%;
+  animation: pulse-red 2s infinite;
+}
+
+.heart-bg {
+  animation: heartbeat 1.8s ease-in-out infinite;
+}
+
+.mono-icon {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  filter: grayscale(1) invert(1) contrast(1.2) brightness(1.1);
+}
+
+/* Nav */
+.nav-desktop { display: flex; }
+.nav-mobile { display: none !important; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .nav-desktop { display: none !important; }
+  .nav-mobile { display: flex !important; }
+  nav { padding: 0 20px !important; }
+  section { padding: 60px 20px !important; }
+  h1 { font-size: 40px !important; letter-spacing: -2px !important; }
+  h2 { font-size: 26px !important; }
+  footer {
+    flex-direction: column !important;
+    gap: 12px !important;
+    text-align: center !important;
+    padding: 32px 20px !important;
+  }
+}
+
+/* Scroll reveal */
+.sr {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.65s cubic-bezier(0.4,0,0.2,1), transform 0.65s cubic-bezier(0.4,0,0.2,1);
+}
+.sr.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.sr-delay-1 { transition-delay: 0.1s; }
+.sr-delay-2 { transition-delay: 0.2s; }
+.sr-delay-3 { transition-delay: 0.3s; }
+.sr-delay-4 { transition-delay: 0.4s; }
+
+@keyframes blobMove1 {
+  from { transform: translate(0px, 0px) scale(1); }
+  to   { transform: translate(60px, 40px) scale(1.1); }
+}
+@keyframes blobMove2 {
+  from { transform: translate(0px, 0px) scale(1); }
+  to   { transform: translate(-50px, 60px) scale(1.15); }
+}
+@keyframes blobMove3 {
+  from { transform: translate(0px, 0px) scale(1); }
+  to   { transform: translate(40px, -50px) scale(0.95); }
+}
+</file>
+
+<file path="app/page.tsx">
+'use client';
+import useScrollReveal from './components/useScrollReveal';
+import Navbar from './components/Navbar';
+import Hero from './components/Hero';
+import ECGSection from './components/ECGSection';
+import OurGoal from './components/OurGoal';
+import WhyItMatters from './components/WhyItMatters';
+import Safety from './components/Safety';
+import WhatWeDo from './components/WhatWeDo';
+import CTA from './components/CTA';
+import Footer from './components/Footer';
+
+export default function Home() {
+  useScrollReveal();
+  return (
+    <main>
+      <Navbar />
+      <Hero />
+      <ECGSection />
+      <OurGoal />
+      <WhyItMatters />
+      <Safety />
+      <WhatWeDo />
+      <CTA />
+      <Footer />
+    </main>
+  );
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "mymedicineroute",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@paper-design/shaders-react": "^0.0.74",
+    "@react-three/fiber": "^9.5.0",
+    "@supabase/supabase-js": "^2.103.0",
+    "clsx": "^2.1.1",
+    "firebase": "^12.11.0",
+    "framer-motion": "^12.38.0",
+    "next": "16.2.2",
+    "next-themes": "^0.4.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "simplex-noise": "^4.0.3",
+    "tailwind-merge": "^3.5.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "^0.183.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
+</file>
+
+</files>

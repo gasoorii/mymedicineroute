@@ -73,7 +73,7 @@ export default function Safety() {
             ))}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           {rules.map(item => (
             <div key={item.title} className={`sr ${item.delay} glass-card`} style={{ borderRadius: '16px', padding: '28px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
               <div style={{

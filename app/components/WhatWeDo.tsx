@@ -179,7 +179,7 @@ export default function WhatWeDo() {
         <h2 className="sr sr-delay-1" style={{ fontSize: '42px', fontWeight: 800, textAlign: 'center', marginBottom: '64px', letterSpacing: '-1.5px', color: '#f1f5f9' }}>
           Real research experience.<br />Before university.
         </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
           {items.map(item => (
             <div key={item.title} className={`sr ${item.delay} glass-card`} style={{ borderRadius: '20px', padding: '32px' }}>
               <div style={{ 

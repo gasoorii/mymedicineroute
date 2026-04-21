@@ -23,7 +23,7 @@ export default function OurGoal() {
         <p className="sr sr-delay-2" style={{ fontSize: '18px', color: '#94a3b8', lineHeight: 1.7, maxWidth: '620px', margin: '0 auto 64px' }}>
           My Medicine Route is a student-founded nonprofit with one mission — give every high schooler in Bahrain a real shot at medical research before university. No connections needed. No experience required.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
           {[
             { num: '50+', label: 'Students involved', desc: 'High schoolers across Bahrain gaining real research experience', delay: 'sr-delay-2' },
             { num: '5+', label: 'Projects completed', desc: 'Real studies published and documented in our archive', delay: 'sr-delay-3' },

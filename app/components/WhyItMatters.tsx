@@ -99,7 +99,7 @@ export default function WhyItMatters() {
           Every year, thousands of Bahraini students passionate about medicine hit the same invisible wall. My Medicine Route tears it down.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '80px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '80px' }}>
           {problems.map(item => (
             <div key={item.title} className={`sr ${item.delay} glass-card`} style={{
               borderRadius: '24px', padding: '40px',
@@ -142,7 +142,7 @@ export default function WhyItMatters() {
           <h3 style={{ fontSize: '32px', fontWeight: 800, color: '#fff', letterSpacing: '-1px', marginBottom: '32px' }}>
             My Medicine Route gives you the entry point you were never given
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '32px' }}>
+          <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '32px' }}>
             {[
               { label: 'Real projects', desc: 'Not textbook exercises. Real studies with real data.' },
               { label: 'Real mentors', desc: 'Medical students and doctors guiding you every step.' },

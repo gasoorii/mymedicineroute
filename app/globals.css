@@ -161,15 +161,12 @@ body {
 
 /* ─── MOBILE ─────────────────────────────────────────── */
 @media (max-width: 768px) {
-  /* Nav */
   .nav-desktop { display: none !important; }
   .nav-mobile { display: flex !important; }
   nav { padding: 0 20px !important; }
 
-  /* Sections */
   section { padding: 60px 20px !important; }
 
-  /* Hero */
   h1 {
     font-size: 38px !important;
     letter-spacing: -2px !important;
@@ -178,7 +175,6 @@ body {
   h2 { font-size: 28px !important; letter-spacing: -1px !important; }
   h3 { font-size: 22px !important; }
 
-  /* Hero buttons stack */
   .hero-btns {
     flex-direction: column !important;
     align-items: center !important;
@@ -190,98 +186,29 @@ body {
     text-align: center !important;
   }
 
-  /* Grids → single column */
-  [style*="grid-template-columns: repeat(3"] {
-    grid-template-columns: 1fr !important;
-  }
-  [style*="grid-template-columns: 1fr 1fr"] {
-    grid-template-columns: 1fr !important;
-  }
-  [style*="grid-template-columns: repeat(3, 1fr)"] {
-    grid-template-columns: 1fr !important;
-  }
-  [style*="grid-template-columns: 1fr 1fr 1fr"] {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* Cards padding */
   .glass-card { padding: 24px !important; }
 
-  /* CTA section */
-  [style*="padding: 140px 64px"] {
-    padding: 60px 20px !important;
-  }
-  [style*="padding: 80px 40px"] {
-    padding: 40px 24px !important;
-  }
-  [style*="border-radius: 40px"] {
-    border-radius: 20px !important;
-  }
-  [style*="font-size: 48px"][style*="font-weight: 800"] {
-    font-size: 32px !important;
-    letter-spacing: -1px !important;
-  }
-
-  /* Safety grid */
-  [style*="grid-template-columns: 1fr 1fr"][style*="gap: 20px"] {
+  .mobile-grid {
     grid-template-columns: 1fr !important;
   }
 
-  /* How we fix it grid */
-  [style*="grid-template-columns: 1fr 1fr 1fr"] {
-    grid-template-columns: 1fr !important;
-    gap: 20px !important;
+  .mobile-grid-2col {
+    grid-template-columns: 1fr 1fr !important;
   }
 
-  /* Footer */
   footer {
     flex-direction: column !important;
     gap: 12px !important;
     text-align: center !important;
     padding: 32px 20px !important;
   }
-
-  /* OurGoal stats */
-  [style*="font-size: 48px"][style*="color: #E11D48"] {
-    font-size: 40px !important;
-  }
-
-  /* ECG section text */
-  [style*="letter-spacing: 4px"] {
-    font-size: 11px !important;
-    letter-spacing: 2px !important;
-  }
-
-  /* WhatWeDo cards */
-  [style*="padding: 100px 64px"] {
-    padding: 60px 20px !important;
-  }
-
-  /* WhyItMatters big box */
-  [style*="padding: 56px"] {
-    padding: 28px 20px !important;
-  }
 }
 
 /* ─── SMALL MOBILE ───────────────────────────────────── */
 @media (max-width: 480px) {
-  h1 {
-    font-size: 32px !important;
-    letter-spacing: -1.5px !important;
-  }
+  h1 { font-size: 32px !important; letter-spacing: -1.5px !important; }
   h2 { font-size: 24px !important; }
-
   .badge-red { font-size: 11px !important; }
-
-  [style*="font-size: 21px"] {
-    font-size: 17px !important;
-  }
-  [style*="font-size: 18px"] {
-    font-size: 16px !important;
-  }
-  [style*="font-size: 19px"] {
-    font-size: 16px !important;
-  }
 }
 
 @keyframes blobMove1 {

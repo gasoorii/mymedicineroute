@@ -9,7 +9,7 @@ export default function Footer() {
         <div style={{ width: '8px', height: '16px', background: '#E11D48', borderRadius: '2px' }} />
         <span style={{ fontWeight: 800, color: '#f1f5f9' }}>My Medicine Route</span>
       </div>
-      <span>Founded by Gasser · Bahrain · 2025</span>
+      <span>Founded by Gasser Mohamed & Co-Founder Hussain KR · Bahrain · 2026</span>
       <a href="mailto:mymedicineroute@gmail.com" style={{ color: 'inherit', textDecoration: 'none' }}>
         mymedicineroute@gmail.com
       </a>

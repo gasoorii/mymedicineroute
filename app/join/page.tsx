@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 const vertexSource = `attribute vec4 a_position; void main() { gl_Position = a_position; }`;
@@ -27,95 +27,81 @@ void main() { mainImage(gl_FragColor, gl_FragCoord.xy); }
 function SmokeyBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initGL = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const gl = canvas.getContext('webgl', { antialias: false, powerPreference: 'low-power' });
     if (!gl) return;
-
     const compile = (type: number, src: string) => {
       const s = gl.createShader(type)!;
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      return s;
+      gl.shaderSource(s, src); gl.compileShader(s); return s;
     };
     const prog = gl.createProgram()!;
     gl.attachShader(prog, compile(gl.VERTEX_SHADER, vertexSource));
     gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragmentSource));
-    gl.linkProgram(prog);
-    gl.useProgram(prog);
-
+    gl.linkProgram(prog); gl.useProgram(prog);
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
     const posLoc = gl.getAttribLocation(prog, 'a_position');
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-    const iRes   = gl.getUniformLocation(prog, 'iResolution');
-    const iTime  = gl.getUniformLocation(prog, 'iTime');
+    const iRes = gl.getUniformLocation(prog, 'iResolution');
+    const iTime = gl.getUniformLocation(prog, 'iTime');
     const iMouse = gl.getUniformLocation(prog, 'iMouse');
     const uColor = gl.getUniformLocation(prog, 'u_color');
     gl.uniform3f(uColor, 0.882, 0.114, 0.282);
-
     const mouse = { x: 0, y: 0, active: false };
-    const size  = { w: 0, h: 0 };
+    const size = { w: 0, h: 0 };
     const start = Date.now();
-    let raf     = 0;
-    let visible = true;
-
+    let raf = 0; let visible = true;
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio, 1.5);
-      const w = Math.floor(canvas.clientWidth  * dpr);
+      const w = Math.floor(canvas.clientWidth * dpr);
       const h = Math.floor(canvas.clientHeight * dpr);
       if (w === size.w && h === size.h) return;
-      canvas.width = w; canvas.height = h;
-      size.w = w; size.h = h;
+      canvas.width = w; canvas.height = h; size.w = w; size.h = h;
       gl.viewport(0, 0, w, h);
     };
-
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
-    resize();
-
+    const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
     const io = new IntersectionObserver(entries => {
-      visible = entries[0].isIntersecting;
-      if (visible) schedule();
+      visible = entries[0].isIntersecting; if (visible) schedule();
     }, { threshold: 0.1 });
     io.observe(canvas);
-
     const draw = () => {
-      raf = 0;
-      if (!visible) return;
+      raf = 0; if (!visible) return;
       gl.uniform2f(iRes, size.w, size.h);
       gl.uniform1f(iTime, (Date.now() - start) / 1000);
       gl.uniform2f(iMouse,
-        mouse.active ? mouse.x * (size.w / canvas.clientWidth)  : size.w  / 2,
+        mouse.active ? mouse.x * (size.w / canvas.clientWidth) : size.w / 2,
         mouse.active ? size.h - mouse.y * (size.h / canvas.clientHeight) : size.h / 2
       );
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      schedule();
+      gl.drawArrays(gl.TRIANGLES, 0, 6); schedule();
     };
-
     const schedule = () => { if (raf) return; raf = requestAnimationFrame(draw); };
     schedule();
-
-    const onMove  = (e: MouseEvent) => { const r = canvas.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; mouse.active = true; };
+    const onMove = (e: MouseEvent) => { const r = canvas.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; mouse.active = true; };
     const onLeave = () => { mouse.active = false; };
     canvas.addEventListener('mousemove', onMove, { passive: true });
     canvas.addEventListener('mouseleave', onLeave, { passive: true });
-
     return () => {
-      cancelAnimationFrame(raf);
-      ro.disconnect(); io.disconnect();
+      cancelAnimationFrame(raf); ro.disconnect(); io.disconnect();
       canvas.removeEventListener('mousemove', onMove);
       canvas.removeEventListener('mouseleave', onLeave);
       gl.deleteProgram(prog);
     };
   }, []);
 
-  return <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useCallback(() => { initGL(); }, []);
+
+  return (
+    <canvas
+      ref={e => { if (e) { (canvasRef as any).current = e; initGL(); } }}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
+    />
+  );
 }
 
 function FloatingInput({ label, name, type = 'text', required = true, onChange, placeholder = ' ' }: {
@@ -174,6 +160,14 @@ function FloatingTextarea({ label, name, rows = 4, onChange, placeholder }: {
   );
 }
 
+async function sendConfirmationEmail(role: 'student' | 'mentor', name: string, email: string) {
+  await fetch('/api/send-confirmation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role, name, email }),
+  });
+}
+
 export default function JoinPage() {
   const [role, setRole]           = useState<'student' | 'mentor'>('student');
   const [submitted, setSubmitted] = useState(false);
@@ -198,12 +192,14 @@ export default function JoinPage() {
           school: form.school, grade: form.grade,
           interest: form.interest, why: form.why,
         });
+        await sendConfirmationEmail('student', form.fullName, form.email);
       } else {
         await supabase.from('mentors').insert({
           full_name: form.fullName, email: form.email,
           role: form.roleTitle, institution: form.institution,
           hours: form.hours,
         });
+        await sendConfirmationEmail('mentor', form.fullName, form.email);
       }
       setSubmitted(true);
     } catch { alert('Something went wrong. Please try again.'); }
@@ -226,7 +222,7 @@ export default function JoinPage() {
           </div>
           <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#f1f5f9', marginBottom: '16px', letterSpacing: '-1px' }}>You're in the queue.</h1>
           <p style={{ fontSize: '16px', color: '#94a3b8', lineHeight: 1.7, marginBottom: '40px' }}>
-            We'll reach out to <strong style={{ color: '#f1f5f9' }}>{form.email}</strong> within a few days.
+            We'll reach out to <strong style={{ color: '#f1f5f9' }}>{form.email}</strong> within a few days. Check your inbox for a confirmation email.
           </p>
           <a href="/" style={{ display: 'inline-block', background: '#E11D48', color: 'white', padding: '14px 32px', borderRadius: '999px', textDecoration: 'none', fontWeight: 700, fontSize: '15px', boxShadow: '0 4px 20px rgba(225,29,72,0.3)' }}>
             Back to home

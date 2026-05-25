@@ -1,10 +1,10 @@
-This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
 
 <file_summary>
 This section contains a summary of this file.
 
 <purpose>
-This file contains a packed representation of the entire repository's contents.
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
 It is designed to be easily consumable by AI systems for analysis, code review,
 or other automated processes.
 </purpose>
@@ -32,6 +32,7 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: node_modules, build, dist, .next, package-lock.json
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -42,6 +43,7 @@ The content is organized as follows:
 <directory_structure>
 .gitignore
 AGENTS.md
+app/api/send-confirmation/route.ts
 app/components/CTA.tsx
 app/components/ECGSection.tsx
 app/components/FallingPattern.tsx
@@ -54,18 +56,24 @@ app/components/useScrollReveal.ts
 app/components/Waves.tsx
 app/components/WhatWeDo.tsx
 app/components/WhyItMatters.tsx
+app/dashboard/mentor/page.tsx
+app/dashboard/student/page.tsx
 app/favicon.ico
 app/globals.css
 app/join/page.tsx
 app/layout.tsx
 app/lib/supabase.ts
 app/lib/utils.ts
+app/login/page.tsx
 app/page.tsx
 CLAUDE.md
 eslint.config.mjs
+middleware.ts
 next.config.ts
 package.json
 postcss.config.mjs
+public/apple-touch-icon.png
+public/favicon.ico
 public/file.svg
 public/first_aid_kit_mono_transparent.png
 public/folder_mono_transparent.png
@@ -73,6 +81,7 @@ public/globe.svg
 public/graduation_hat_mono_transparent.png
 public/handshake_mono_transparent.png
 public/heart_transparent.gif
+public/icon-512.png
 public/microscope_mono_transparent.png
 public/next.svg
 public/stethoscope_transparent.png
@@ -257,32 +266,1216 @@ return (
   }
 </file>
 
-<file path="app/layout.tsx">
-import { Inter } from 'next/font/google'
-import './globals.css' // This works automatically in app/layout.tsx
+<file path="app/dashboard/mentor/page.tsx">
+'use client';
 
-const inter = Inter({ subsets: ['latin'] })
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabase';
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
+type Profile = { full_name: string; email: string };
+type MentorProfile = {
+  bio: string; expertise_tags: string[];
+  institution: string; role_title: string;
+  hours_per_week: string; available: boolean;
+};
+type MatchRequest = {
+  id: string; student_query: string; ai_summary: string;
+  status: string; created_at: string; student_id: string;
+};
+type Conversation = {
+  id: string; ai_summary: string; status: string; created_at: string;
+};
+
+export default function MentorDashboard() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [mentorProfile, setMentorProfile] = useState<MentorProfile | null>(null);
+  const [matchRequests, setMatchRequests] = useState<MatchRequest[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'home' | 'requests' | 'messages' | 'profile'>('home');
+  const [userId, setUserId] = useState<string>('');
+
+  // Profile edit state
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ bio: '', hours_per_week: '', available: true });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push('/login'); return; }
+    setUserId(user.id);
+
+    const [{ data: prof }, { data: mentProf }, { data: reqs }, { data: convs }] = await Promise.all([
+      supabase.from('profiles').select('full_name, email').eq('id', user.id).single(),
+      supabase.from('mentor_profiles').select('*').eq('id', user.id).single(),
+      supabase.from('match_requests').select('*').eq('matched_mentor_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('conversations').select('*').eq('mentor_id', user.id).order('created_at', { ascending: false }),
+    ]);
+
+    setProfile(prof);
+    setMentorProfile(mentProf);
+    setMatchRequests(reqs || []);
+    setConversations(convs || []);
+    setEditForm({
+      bio: mentProf?.bio || '',
+      hours_per_week: mentProf?.hours_per_week || '',
+      available: mentProf?.available ?? true,
+    });
+    setLoading(false);
+  };
+
+  const acceptMatch = async (requestId: string, studentId: string) => {
+    // Create conversation
+    const { data: conv, error: convError } = await supabase.from('conversations').insert({
+      student_id: studentId,
+      mentor_id: userId,
+      status: 'active',
+    }).select().single();
+
+    if (convError || !conv) return;
+
+    // Update match request status
+    await supabase.from('match_requests').update({ status: 'matched' }).eq('id', requestId);
+
+    loadData();
+    setTab('messages');
+  };
+
+  const declineMatch = async (requestId: string) => {
+    await supabase.from('match_requests').update({ status: 'rejected' }).eq('id', requestId);
+    loadData();
+  };
+
+  const saveProfile = async () => {
+    setSaving(true);
+    await supabase.from('mentor_profiles').update({
+      bio: editForm.bio,
+      hours_per_week: editForm.hours_per_week,
+      available: editForm.available,
+      updated_at: new Date().toISOString(),
+    }).eq('id', userId);
+    await loadData();
+    setEditMode(false);
+    setSaving(false);
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
+  if (loading) return <LoadingScreen />;
+
+  const firstName = profile?.full_name?.split(' ')[0] || 'Mentor';
+  const pendingRequests = matchRequests.filter(r => r.status === 'pending');
+  const activeConversations = conversations.filter(c => c.status === 'active');
+
+  return (
+    <div style={s.root}>
+      {/* SIDEBAR */}
+      <aside style={s.sidebar}>
+        <div style={s.sidebarTop}>
+          <a href="/" style={s.logoLink}>
+            <div style={s.logoBar} />
+            <span style={s.logoText}>MMR</span>
+          </a>
+          <nav style={s.nav}>
+            {([
+              { key: 'home', label: 'Overview', icon: '◈' },
+              { key: 'requests', label: 'Match Requests', icon: '⟡', count: pendingRequests.length },
+              { key: 'messages', label: 'Messages', icon: '◻', count: activeConversations.length },
+              { key: 'profile', label: 'My Profile', icon: '○' },
+            ] as const).map(item => (
+              <button
+                key={item.key}
+                onClick={() => setTab(item.key)}
+                style={{ ...s.navItem, ...(tab === item.key ? s.navItemActive : {}) }}
+              >
+                <span style={s.navIcon}>{item.icon}</span>
+                {item.label}
+                {'count' in item && item.count > 0 && (
+                  <span style={s.badge}>{item.count}</span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+        <div style={s.sidebarBottom}>
+          <div style={s.profileChip}>
+            <div style={s.avatar}>{firstName[0]}</div>
+            <div>
+              <div style={s.chipName}>{profile?.full_name}</div>
+              <div style={s.chipRole}>
+                {mentorProfile?.available ? '🟢 Available' : '⚫ Unavailable'}
+              </div>
+            </div>
+          </div>
+          <button onClick={signOut} style={s.signOutBtn}>Sign out</button>
+        </div>
+      </aside>
+
+      {/* MAIN */}
+      <main style={s.main}>
+
+        {/* ── HOME TAB ── */}
+        {tab === 'home' && (
+          <div style={s.content}>
+            <div style={s.pageHeader}>
+              <h1 style={s.greeting}>Welcome, {firstName}</h1>
+              <p style={s.greetingSub}>Here's a summary of your mentoring activity.</p>
+            </div>
+
+            <div style={s.statRow}>
+              {[
+                { label: 'Pending Requests', value: pendingRequests.length, sub: 'awaiting your response' },
+                { label: 'Active Chats', value: activeConversations.length, sub: 'ongoing sessions' },
+                { label: 'Total Mentored', value: matchRequests.filter(r => r.status === 'matched').length, sub: 'students matched' },
+              ].map(stat => (
+                <div key={stat.label} style={s.statCard}>
+                  <div style={s.statValue}>{stat.value}</div>
+                  <div style={s.statLabel}>{stat.label}</div>
+                  <div style={s.statSub}>{stat.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Expertise tags */}
+            {mentorProfile?.expertise_tags?.length > 0 && (
+              <div style={s.section}>
+                <h2 style={s.sectionTitle}>Your Expertise</h2>
+                <div style={s.tagRow}>
+                  {mentorProfile.expertise_tags.map(tag => (
+                    <span key={tag} style={s.tagChip}>{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pending requests preview */}
+            {pendingRequests.length > 0 && (
+              <div style={s.section}>
+                <div style={s.sectionHeader}>
+                  <h2 style={s.sectionTitle}>Pending Requests</h2>
+                  <button onClick={() => setTab('requests')} style={s.sectionAction}>View all</button>
+                </div>
+                <div style={s.list}>
+                  {pendingRequests.slice(0, 2).map(req => (
+                    <RequestCard key={req.id} req={req} onAccept={acceptMatch} onDecline={declineMatch} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pendingRequests.length === 0 && (
+              <div style={s.section}>
+                <div style={s.emptyState}>
+                  <div style={s.emptyIcon}>⟡</div>
+                  <h3 style={s.emptyTitle}>No pending requests</h3>
+                  <p style={s.emptyDesc}>
+                    When a student's needs match your expertise, a request will appear here.
+                    Make sure your profile is complete and you're set to available.
+                  </p>
+                  <button onClick={() => setTab('profile')} style={s.btnRed}>Update Profile</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── REQUESTS TAB ── */}
+        {tab === 'requests' && (
+          <div style={s.content}>
+            <div style={s.pageHeader}>
+              <h1 style={s.pageTitle}>Match Requests</h1>
+              <p style={s.pageSub}>Students whose needs match your expertise. Review and accept or decline.</p>
+            </div>
+
+            {matchRequests.length === 0 ? (
+              <div style={s.emptyState}>
+                <div style={s.emptyIcon}>⟡</div>
+                <h3 style={s.emptyTitle}>No requests yet</h3>
+                <p style={s.emptyDesc}>Requests will appear here when the AI matches a student to your expertise profile.</p>
+              </div>
+            ) : (
+              <div>
+                {pendingRequests.length > 0 && (
+                  <div style={s.section}>
+                    <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Pending — {pendingRequests.length}</h2>
+                    <div style={s.list}>
+                      {pendingRequests.map(req => (
+                        <RequestCard key={req.id} req={req} onAccept={acceptMatch} onDecline={declineMatch} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {matchRequests.filter(r => r.status !== 'pending').length > 0 && (
+                  <div style={s.section}>
+                    <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Past Requests</h2>
+                    <div style={s.list}>
+                      {matchRequests.filter(r => r.status !== 'pending').map(req => (
+                        <div key={req.id} style={s.listItem}>
+                          <div style={s.listItemLeft}>
+                            <span style={{
+                              ...s.statusDot,
+                              background: req.status === 'matched' ? '#22c55e' : '#475569',
+                            }} />
+                            <div>
+                              <div style={s.listItemTitle}>
+                                {req.student_query.slice(0, 100)}{req.student_query.length > 100 ? '...' : ''}
+                              </div>
+                              <div style={s.listItemMeta}>
+                                {req.status.charAt(0).toUpperCase() + req.status.slice(1)} ·{' '}
+                                {new Date(req.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MESSAGES TAB ── */}
+        {tab === 'messages' && (
+          <div style={s.content}>
+            <div style={s.pageHeader}>
+              <h1 style={s.pageTitle}>Messages</h1>
+              <p style={s.pageSub}>Your anonymous student chats.</p>
+            </div>
+            {conversations.length === 0 ? (
+              <div style={s.emptyState}>
+                <div style={s.emptyIcon}>◻</div>
+                <h3 style={s.emptyTitle}>No conversations yet</h3>
+                <p style={s.emptyDesc}>Accept a match request to open an anonymous chat with a student.</p>
+                <button onClick={() => setTab('requests')} style={s.btnRed}>View Requests</button>
+              </div>
+            ) : (
+              <div style={s.list}>
+                {conversations.map(conv => (
+                  <div key={conv.id} style={{ ...s.listItem, cursor: 'pointer' }}>
+                    <div style={s.listItemLeft}>
+                      <div style={s.convAvatar}>S</div>
+                      <div>
+                        <div style={s.listItemTitle}>Student Chat</div>
+                        {conv.ai_summary && (
+                          <div style={s.aiSummaryChip}>Topic: {conv.ai_summary}</div>
+                        )}
+                        <div style={s.listItemMeta}>
+                          {conv.status === 'active' ? '🟢 Active' : '⚫ Closed'} ·{' '}
+                          {new Date(conv.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={s.chevron}>›</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── PROFILE TAB ── */}
+        {tab === 'profile' && (
+          <div style={s.content}>
+            <div style={s.pageHeader}>
+              <h1 style={s.pageTitle}>My Profile</h1>
+              <p style={s.pageSub}>This is what the AI uses to match you with students.</p>
+            </div>
+
+            <div style={s.profileCard}>
+              <div style={s.profileCardHeader}>
+                <div>
+                  <div style={s.profileName}>{profile?.full_name}</div>
+                  <div style={s.profileMeta}>
+                    {mentorProfile?.role_title} · {mentorProfile?.institution}
+                  </div>
+                </div>
+                <button onClick={() => setEditMode(!editMode)} style={s.editBtn}>
+                  {editMode ? 'Cancel' : 'Edit'}
+                </button>
+              </div>
+
+              {editMode ? (
+                <div style={{ display: 'grid', gap: '20px', marginTop: '24px' }}>
+                  <div>
+                    <label style={s.label}>Bio</label>
+                    <textarea
+                      value={editForm.bio}
+                      onChange={e => setEditForm({ ...editForm, bio: e.target.value })}
+                      rows={4} style={s.textarea}
+                      placeholder="Tell students about your background..."
+                    />
+                  </div>
+                  <div>
+                    <label style={s.label}>Hours available per week</label>
+                    <select
+                      value={editForm.hours_per_week}
+                      onChange={e => setEditForm({ ...editForm, hours_per_week: e.target.value })}
+                      style={s.input}
+                    >
+                      {['Less than 1 hour', '1–2 hours', '2–4 hours', '4+ hours'].map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <label style={s.label}>Available for new students</label>
+                    <button
+                      onClick={() => setEditForm({ ...editForm, available: !editForm.available })}
+                      style={{
+                        ...s.toggleBtn,
+                        background: editForm.available ? '#22c55e' : '#334155',
+                      }}
+                    >
+                      {editForm.available ? 'Yes' : 'No'}
+                    </button>
+                  </div>
+                  <button onClick={saveProfile} disabled={saving} style={s.btnRed}>
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginTop: '24px', display: 'grid', gap: '20px' }}>
+                  <div>
+                    <div style={s.fieldLabel}>Bio</div>
+                    <div style={s.fieldValue}>{mentorProfile?.bio || 'No bio added yet.'}</div>
+                  </div>
+                  <div>
+                    <div style={s.fieldLabel}>Availability</div>
+                    <div style={s.fieldValue}>{mentorProfile?.hours_per_week || '—'} per week</div>
+                  </div>
+                  <div>
+                    <div style={s.fieldLabel}>Status</div>
+                    <div style={{ ...s.fieldValue, color: mentorProfile?.available ? '#22c55e' : '#94a3b8' }}>
+                      {mentorProfile?.available ? 'Available for new students' : 'Not available'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={s.fieldLabel}>Expertise Areas</div>
+                    <div style={s.tagRow}>
+                      {mentorProfile?.expertise_tags?.length > 0
+                        ? mentorProfile.expertise_tags.map(tag => (
+                          <span key={tag} style={s.tagChip}>{tag}</span>
+                        ))
+                        : <span style={{ color: '#475569', fontSize: '14px' }}>None added yet.</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function RequestCard({ req, onAccept, onDecline }: {
+  req: MatchRequest;
+  onAccept: (id: string, studentId: string) => void;
+  onDecline: (id: string) => void;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
-    </html>
-  )
+    <div style={s.requestCard}>
+      <div style={s.requestHeader}>
+        <span style={s.requestTag}>AI-Matched</span>
+        <span style={s.requestDate}>{new Date(req.created_at).toLocaleDateString()}</span>
+      </div>
+      <div style={s.requestQuery}>{req.student_query}</div>
+      {req.ai_summary && (
+        <div style={s.requestSummary}>
+          <span style={s.requestSummaryLabel}>AI Summary:</span> {req.ai_summary}
+        </div>
+      )}
+      <div style={s.requestActions}>
+        <button onClick={() => onAccept(req.id, req.student_id)} style={s.acceptBtn}>
+          Accept & Connect
+        </button>
+        <button onClick={() => onDecline(req.id)} style={s.declineBtn}>
+          Decline
+        </button>
+      </div>
+    </div>
+  );
 }
+
+function LoadingScreen() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d0d0d' }}>
+      <div style={{ color: '#E11D48', fontSize: '24px' }}>◈</div>
+    </div>
+  );
+}
+
+const s: Record<string, React.CSSProperties> = {
+  root: { display: 'flex', minHeight: '100vh', background: '#0d0d0d', fontFamily: "'Inter', sans-serif" },
+  sidebar: {
+    width: '240px', flexShrink: 0, background: '#111213',
+    borderRight: '1px solid rgba(255,255,255,0.06)',
+    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+    padding: '28px 16px', position: 'sticky', top: 0, height: '100vh',
+  },
+  sidebarTop: { display: 'flex', flexDirection: 'column', gap: '32px' },
+  logoLink: { display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', padding: '0 8px' },
+  logoBar: { width: '6px', height: '18px', background: '#E11D48', borderRadius: '2px' },
+  logoText: { fontWeight: 800, fontSize: '15px', color: '#f1f5f9' },
+  nav: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  navItem: {
+    display: 'flex', alignItems: 'center', gap: '10px',
+    padding: '10px 12px', borderRadius: '10px', border: 'none',
+    background: 'transparent', color: '#64748b', fontSize: '14px', fontWeight: 600,
+    cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+  },
+  navItemActive: { background: 'rgba(225,29,72,0.1)', color: '#f1f5f9' },
+  navIcon: { fontSize: '16px', width: '20px', textAlign: 'center' },
+  badge: {
+    marginLeft: 'auto', background: '#E11D48', color: '#fff',
+    fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px',
+  },
+  sidebarBottom: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  profileChip: {
+    display: 'flex', alignItems: 'center', gap: '10px',
+    padding: '12px', borderRadius: '12px',
+    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+  },
+  avatar: {
+    width: '32px', height: '32px', borderRadius: '50%', background: '#E11D48',
+    color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontWeight: 800, fontSize: '14px', flexShrink: 0,
+  },
+  chipName: { fontSize: '13px', fontWeight: 700, color: '#f1f5f9' },
+  chipRole: { fontSize: '11px', color: '#64748b' },
+  signOutBtn: {
+    background: 'none', border: 'none', color: '#64748b', fontSize: '13px',
+    fontWeight: 600, cursor: 'pointer', padding: '8px 12px', textAlign: 'left',
+    borderRadius: '8px',
+  },
+  main: { flex: 1, overflowY: 'auto' },
+  content: { maxWidth: '800px', margin: '0 auto', padding: '48px 40px' },
+  pageHeader: { marginBottom: '40px' },
+  greeting: { fontSize: '32px', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-1px', marginBottom: '8px' },
+  greetingSub: { fontSize: '15px', color: '#64748b' },
+  pageTitle: { fontSize: '28px', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.5px', marginBottom: '8px' },
+  pageSub: { fontSize: '15px', color: '#64748b', lineHeight: 1.6, maxWidth: '540px' },
+  statRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '40px' },
+  statCard: {
+    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '16px', padding: '24px',
+  },
+  statValue: { fontSize: '36px', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-1px', marginBottom: '4px' },
+  statLabel: { fontSize: '13px', fontWeight: 700, color: '#94a3b8', marginBottom: '4px' },
+  statSub: { fontSize: '12px', color: '#475569' },
+  section: { marginTop: '40px' },
+  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
+  sectionTitle: { fontSize: '16px', fontWeight: 700, color: '#f1f5f9' },
+  sectionAction: {
+    background: 'none', border: '1px solid rgba(225,29,72,0.3)', color: '#E11D48',
+    fontSize: '13px', fontWeight: 600, padding: '6px 14px', borderRadius: '999px', cursor: 'pointer',
+  },
+  tagRow: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' },
+  tagChip: {
+    padding: '6px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 600,
+    background: 'rgba(225,29,72,0.08)', color: '#E11D48',
+    border: '1px solid rgba(225,29,72,0.2)',
+  },
+  list: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  listItem: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '16px 20px', borderRadius: '12px',
+    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+  },
+  listItemLeft: { display: 'flex', alignItems: 'flex-start', gap: '12px' },
+  listItemTitle: { fontSize: '14px', fontWeight: 600, color: '#e2e8f0', marginBottom: '4px' },
+  listItemMeta: { fontSize: '12px', color: '#475569' },
+  statusDot: { width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, marginTop: '5px' },
+  aiSummaryChip: {
+    fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', marginBottom: '4px',
+    padding: '3px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px',
+    display: 'inline-block', marginTop: '2px',
+  },
+  convAvatar: {
+    width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)',
+    color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontWeight: 800, fontSize: '14px', flexShrink: 0,
+  },
+  chevron: { color: '#475569', fontSize: '20px' },
+  requestCard: {
+    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
+  },
+  requestHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  requestTag: {
+    fontSize: '11px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase',
+    color: '#E11D48', background: 'rgba(225,29,72,0.1)',
+    border: '1px solid rgba(225,29,72,0.2)', padding: '3px 10px', borderRadius: '999px',
+  },
+  requestDate: { fontSize: '12px', color: '#475569' },
+  requestQuery: { fontSize: '15px', color: '#e2e8f0', lineHeight: 1.6 },
+  requestSummary: {
+    fontSize: '13px', color: '#94a3b8', fontStyle: 'italic', lineHeight: 1.5,
+    padding: '12px 16px', background: 'rgba(255,255,255,0.03)',
+    borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)',
+  },
+  requestSummaryLabel: { fontStyle: 'normal', fontWeight: 700, color: '#64748b' },
+  requestActions: { display: 'flex', gap: '12px' },
+  acceptBtn: {
+    background: '#E11D48', color: '#fff', border: 'none',
+    borderRadius: '999px', padding: '10px 20px', fontSize: '14px', fontWeight: 700,
+    cursor: 'pointer', boxShadow: '0 4px 12px rgba(225,29,72,0.25)',
+  },
+  declineBtn: {
+    background: 'none', color: '#64748b', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '999px', padding: '10px 20px', fontSize: '14px', fontWeight: 600,
+    cursor: 'pointer',
+  },
+  profileCard: {
+    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '20px', padding: '32px',
+  },
+  profileCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
+  profileName: { fontSize: '20px', fontWeight: 800, color: '#f1f5f9', marginBottom: '4px' },
+  profileMeta: { fontSize: '14px', color: '#64748b' },
+  editBtn: {
+    background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8',
+    borderRadius: '999px', padding: '8px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+  },
+  fieldLabel: { fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '6px' },
+  fieldValue: { fontSize: '15px', color: '#e2e8f0', lineHeight: 1.6 },
+  label: { display: 'block', fontSize: '13px', fontWeight: 700, color: '#94a3b8', marginBottom: '8px' },
+  input: {
+    width: '100%', padding: '12px 16px', border: '1.5px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px', fontSize: '15px', color: '#e2e8f0',
+    background: 'rgba(255,255,255,0.04)', outline: 'none',
+    fontFamily: "'Inter', sans-serif", boxSizing: 'border-box',
+  },
+  textarea: {
+    width: '100%', padding: '14px 16px', border: '1.5px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px', fontSize: '15px', color: '#e2e8f0',
+    background: 'rgba(255,255,255,0.04)', outline: 'none', resize: 'vertical',
+    fontFamily: "'Inter', sans-serif", lineHeight: 1.6, boxSizing: 'border-box',
+  },
+  toggleBtn: {
+    border: 'none', borderRadius: '999px', padding: '6px 16px',
+    fontSize: '13px', fontWeight: 700, color: '#fff', cursor: 'pointer',
+  },
+  emptyState: {
+    textAlign: 'center', padding: '64px 32px',
+    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '20px',
+  },
+  emptyIcon: { fontSize: '32px', marginBottom: '16px', color: '#334155' },
+  emptyTitle: { fontSize: '18px', fontWeight: 700, color: '#94a3b8', marginBottom: '8px' },
+  emptyDesc: { fontSize: '14px', color: '#475569', maxWidth: '320px', margin: '0 auto 24px', lineHeight: 1.6 },
+  btnRed: {
+    background: '#E11D48', color: '#fff', border: 'none',
+    borderRadius: '999px', padding: '14px 28px', fontSize: '15px', fontWeight: 700,
+    cursor: 'pointer', boxShadow: '0 4px 15px rgba(225,29,72,0.25)', display: 'inline-block',
+  },
+};
 </file>
 
-<file path="app/lib/supabase.ts">
-import { createClient } from '@supabase/supabase-js';
+<file path="app/dashboard/student/page.tsx">
+'use client';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabase';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+type Profile = {
+  full_name: string;
+  email: string;
+};
+
+type StudentProfile = {
+  school: string;
+  grade: string;
+  interest: string;
+};
+
+type Conversation = {
+  id: string;
+  ai_summary: string;
+  status: string;
+  created_at: string;
+  mentor_id: string;
+};
+
+type MatchRequest = {
+  id: string;
+  student_query: string;
+  ai_summary: string;
+  status: string;
+  created_at: string;
+};
+
+export default function StudentDashboard() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [matchRequests, setMatchRequests] = useState<MatchRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'home' | 'match' | 'messages'>('home');
+
+  // Match form state
+  const [query, setQuery] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [matchError, setMatchError] = useState('');
+  const [matchSuccess, setMatchSuccess] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push('/login'); return; }
+
+    const [{ data: prof }, { data: stuProf }, { data: convs }, { data: reqs }] = await Promise.all([
+      supabase.from('profiles').select('full_name, email').eq('id', user.id).single(),
+      supabase.from('student_profiles').select('school, grade, interest').eq('id', user.id).single(),
+      supabase.from('conversations').select('*').eq('student_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('match_requests').select('*').eq('student_id', user.id).order('created_at', { ascending: false }),
+    ]);
+
+    setProfile(prof);
+    setStudentProfile(stuProf);
+    setConversations(convs || []);
+    setMatchRequests(reqs || []);
+    setLoading(false);
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  // Replace the submitMatchRequest function in app/dashboard/student/page.tsx
+
+const submitMatchRequest = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!query.trim()) return;
+  setSubmitting(true);
+  setMatchError('');
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // 1. Insert the match request
+  const { data: matchReq, error: insertError } = await supabase
+    .from('match_requests')
+    .insert({ student_id: user.id, student_query: query, status: 'pending' })
+    .select()
+    .single();
+
+  if (insertError || !matchReq) {
+    setMatchError('Failed to submit. Please try again.');
+    setSubmitting(false);
+    return;
+  }
+
+  // 2. Call the AI matching edge function
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/match-student`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({ match_request_id: matchReq.id }),
+    }
+  );
+
+  const result = await res.json();
+
+  if (result.status === 'no_mentors_available') {
+    // No mentors yet — request is saved, will be matched later
+    setMatchSuccess(true);
+  } else if (result.error) {
+    setMatchError('Matching failed. Your request is saved and will be reviewed manually.');
+    setMatchSuccess(true); // Still show success — request is saved
+  } else {
+    // Successfully matched
+    setMatchSuccess(true);
+  }
+
+  setQuery('');
+  loadData();
+  setSubmitting(false);
+};
+
+  if (loading) return <LoadingScreen />;
+
+  const firstName = profile?.full_name?.split(' ')[0] || 'Student';
+  const pendingRequests = matchRequests.filter(r => r.status === 'pending');
+  const activeConversations = conversations.filter(c => c.status === 'active');
+
+  return (
+    <div style={s.root}>
+      {/* SIDEBAR */}
+      <aside style={s.sidebar}>
+        <div style={s.sidebarTop}>
+          <a href="/" style={s.logoLink}>
+            <div style={s.logoBar} />
+            <span style={s.logoText}>MMR</span>
+          </a>
+          <nav style={s.nav}>
+            {([
+              { key: 'home', label: 'Overview', icon: '◈' },
+              { key: 'match', label: 'Find a Mentor', icon: '⟡' },
+              { key: 'messages', label: 'Messages', icon: '◻' },
+            ] as const).map(item => (
+              <button
+                key={item.key}
+                onClick={() => setTab(item.key)}
+                style={{ ...s.navItem, ...(tab === item.key ? s.navItemActive : {}) }}
+              >
+                <span style={s.navIcon}>{item.icon}</span>
+                {item.label}
+                {item.key === 'messages' && activeConversations.length > 0 && (
+                  <span style={s.badge}>{activeConversations.length}</span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+        <div style={s.sidebarBottom}>
+          <div style={s.profileChip}>
+            <div style={s.avatar}>{firstName[0]}</div>
+            <div>
+              <div style={s.chipName}>{profile?.full_name}</div>
+              <div style={s.chipRole}>Student · Grade {studentProfile?.grade}</div>
+            </div>
+          </div>
+          <button onClick={signOut} style={s.signOutBtn}>Sign out</button>
+        </div>
+      </aside>
+
+      {/* MAIN */}
+      <main style={s.main}>
+
+        {/* ── HOME TAB ── */}
+        {tab === 'home' && (
+          <div style={s.content}>
+            <div style={s.pageHeader}>
+              <h1 style={s.greeting}>Good to see you, {firstName}</h1>
+              <p style={s.greetingSub}>Here's where you stand with your research journey.</p>
+            </div>
+
+            <div style={s.statRow}>
+              {[
+                { label: 'Match Requests', value: matchRequests.length, sub: `${pendingRequests.length} pending` },
+                { label: 'Active Chats', value: activeConversations.length, sub: 'with mentors' },
+                { label: 'Interest Area', value: studentProfile?.interest || '—', sub: 'your focus', small: true },
+              ].map(stat => (
+                <div key={stat.label} style={s.statCard}>
+                  <div style={{ ...s.statValue, ...(stat.small ? s.statValueSmall : {}) }}>
+                    {stat.value}
+                  </div>
+                  <div style={s.statLabel}>{stat.label}</div>
+                  <div style={s.statSub}>{stat.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Recent match requests */}
+            <div style={s.section}>
+              <div style={s.sectionHeader}>
+                <h2 style={s.sectionTitle}>Recent Match Requests</h2>
+                <button onClick={() => setTab('match')} style={s.sectionAction}>
+                  + New request
+                </button>
+              </div>
+              {matchRequests.length === 0 ? (
+                <EmptyState
+                  icon="⟡"
+                  title="No requests yet"
+                  desc="Submit a question or research challenge to get matched with a mentor."
+                  action="Find a Mentor"
+                  onAction={() => setTab('match')}
+                />
+              ) : (
+                <div style={s.list}>
+                  {matchRequests.slice(0, 3).map(req => (
+                    <div key={req.id} style={s.listItem}>
+                      <div style={s.listItemLeft}>
+                        <span style={{
+                          ...s.statusDot,
+                          background: req.status === 'matched' ? '#22c55e'
+                            : req.status === 'pending' ? '#f59e0b' : '#94a3b8',
+                        }} />
+                        <div>
+                          <div style={s.listItemTitle}>
+                            {req.student_query.slice(0, 80)}{req.student_query.length > 80 ? '...' : ''}
+                          </div>
+                          <div style={s.listItemMeta}>
+                            {req.status.charAt(0).toUpperCase() + req.status.slice(1)} ·{' '}
+                            {new Date(req.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── MATCH TAB ── */}
+        {tab === 'match' && (
+          <div style={s.content}>
+            <div style={s.pageHeader}>
+              <h1 style={s.pageTitle}>Find a Mentor</h1>
+              <p style={s.pageSub}>
+                Describe your research question or what you're struggling with.
+                Our AI will summarize your needs and match you with the right mentor.
+              </p>
+            </div>
+
+            {matchSuccess ? (
+              <div style={s.successCard}>
+                <div style={s.successIcon}>✓</div>
+                <h3 style={s.successTitle}>Request submitted</h3>
+                <p style={s.successText}>
+                  Our AI is reviewing your question and finding the best mentor match.
+                  You'll be notified when a mentor is connected.
+                </p>
+                <button onClick={() => setMatchSuccess(false)} style={s.btnRed}>
+                  Submit another request
+                </button>
+              </div>
+            ) : (
+              <div style={s.matchCard}>
+                <div style={s.matchCardHeader}>
+                  <span style={s.aiTag}>AI-Powered Matching</span>
+                  <h2 style={s.matchCardTitle}>What do you need help with?</h2>
+                  <p style={s.matchCardSub}>
+                    Be specific. The more detail you give, the better the match.
+                    You can describe a research topic, a methodology question, or a challenge you're facing.
+                  </p>
+                </div>
+
+                <form onSubmit={submitMatchRequest}>
+                  <textarea
+                    value={query}
+                    onChange={e => { setQuery(e.target.value); setMatchError(''); }}
+                    rows={6}
+                    style={s.textarea}
+                    placeholder="e.g. I want to study the correlation between social media use and sleep quality in Bahraini high school students. I don't know how to design a survey that avoids bias, and I'm not sure how to analyse the results statistically..."
+                  />
+                  <div style={s.charCount}>{query.length} / 1000 characters</div>
+
+                  {matchError && <p style={s.errorText}>{matchError}</p>}
+
+                  <button
+                    type="submit"
+                    disabled={submitting || query.trim().length < 20}
+                    style={{
+                      ...s.btnRed,
+                      width: '100%',
+                      opacity: submitting || query.trim().length < 20 ? 0.5 : 1,
+                      cursor: submitting || query.trim().length < 20 ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {submitting ? 'Submitting...' : 'Submit for Matching →'}
+                  </button>
+                </form>
+
+                <div style={s.howItWorks}>
+                  <p style={s.howTitle}>How it works</p>
+                  <div style={s.howSteps}>
+                    {[
+                      { n: '1', text: 'You describe your question or challenge' },
+                      { n: '2', text: 'AI summarizes your needs and finds the best mentor match' },
+                      { n: '3', text: 'An anonymous chat opens between you and your mentor' },
+                    ].map(step => (
+                      <div key={step.n} style={s.howStep}>
+                        <div style={s.howNum}>{step.n}</div>
+                        <div style={s.howText}>{step.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Past requests */}
+            {matchRequests.length > 0 && (
+              <div style={s.section}>
+                <h2 style={s.sectionTitle}>Your Past Requests</h2>
+                <div style={s.list}>
+                  {matchRequests.map(req => (
+                    <div key={req.id} style={s.listItem}>
+                      <div style={s.listItemLeft}>
+                        <span style={{
+                          ...s.statusDot,
+                          background: req.status === 'matched' ? '#22c55e'
+                            : req.status === 'pending' ? '#f59e0b' : '#94a3b8',
+                        }} />
+                        <div>
+                          <div style={s.listItemTitle}>
+                            {req.student_query.slice(0, 100)}{req.student_query.length > 100 ? '...' : ''}
+                          </div>
+                          {req.ai_summary && (
+                            <div style={s.aiSummaryChip}>AI summary: {req.ai_summary}</div>
+                          )}
+                          <div style={s.listItemMeta}>
+                            {req.status.charAt(0).toUpperCase() + req.status.slice(1)} ·{' '}
+                            {new Date(req.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MESSAGES TAB ── */}
+        {tab === 'messages' && (
+          <div style={s.content}>
+            <div style={s.pageHeader}>
+              <h1 style={s.pageTitle}>Messages</h1>
+              <p style={s.pageSub}>Your anonymous chats with mentors.</p>
+            </div>
+
+            {conversations.length === 0 ? (
+              <EmptyState
+                icon="◻"
+                title="No conversations yet"
+                desc="Once a mentor accepts your match request, an anonymous chat will open here."
+                action="Find a Mentor"
+                onAction={() => setTab('match')}
+              />
+            ) : (
+              <div style={s.list}>
+                {conversations.map(conv => (
+                  <div key={conv.id} style={{ ...s.listItem, cursor: 'pointer' }}>
+                    <div style={s.listItemLeft}>
+                      <div style={s.convAvatar}>M</div>
+                      <div>
+                        <div style={s.listItemTitle}>Mentor Chat</div>
+                        {conv.ai_summary && (
+                          <div style={s.listItemMeta}>Topic: {conv.ai_summary}</div>
+                        )}
+                        <div style={s.listItemMeta}>
+                          {conv.status === 'active' ? '🟢 Active' : '⚫ Closed'} ·{' '}
+                          {new Date(conv.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={s.chevron}>›</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, desc, action, onAction }: {
+  icon: string; title: string; desc: string; action: string; onAction: () => void;
+}) {
+  return (
+    <div style={s.emptyState}>
+      <div style={s.emptyIcon}>{icon}</div>
+      <h3 style={s.emptyTitle}>{title}</h3>
+      <p style={s.emptyDesc}>{desc}</p>
+      <button onClick={onAction} style={s.btnRed}>{action}</button>
+    </div>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d0d0d' }}>
+      <div style={{ color: '#E11D48', fontSize: '24px' }}>◈</div>
+    </div>
+  );
+}
+
+const s: Record<string, React.CSSProperties> = {
+  root: { display: 'flex', minHeight: '100vh', background: '#0d0d0d', fontFamily: "'Inter', sans-serif" },
+
+  // Sidebar
+  sidebar: {
+    width: '240px', flexShrink: 0,
+    background: '#111213', borderRight: '1px solid rgba(255,255,255,0.06)',
+    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+    padding: '28px 16px', position: 'sticky', top: 0, height: '100vh',
+  },
+  sidebarTop: { display: 'flex', flexDirection: 'column', gap: '32px' },
+  logoLink: { display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', padding: '0 8px' },
+  logoBar: { width: '6px', height: '18px', background: '#E11D48', borderRadius: '2px' },
+  logoText: { fontWeight: 800, fontSize: '15px', color: '#f1f5f9' },
+  nav: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  navItem: {
+    display: 'flex', alignItems: 'center', gap: '10px',
+    padding: '10px 12px', borderRadius: '10px', border: 'none',
+    background: 'transparent', color: '#64748b', fontSize: '14px', fontWeight: 600,
+    cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+  },
+  navItemActive: { background: 'rgba(225,29,72,0.1)', color: '#f1f5f9' },
+  navIcon: { fontSize: '16px', width: '20px', textAlign: 'center' },
+  badge: {
+    marginLeft: 'auto', background: '#E11D48', color: '#fff',
+    fontSize: '11px', fontWeight: 700, padding: '2px 7px', borderRadius: '999px',
+  },
+  sidebarBottom: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  profileChip: {
+    display: 'flex', alignItems: 'center', gap: '10px',
+    padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.06)',
+  },
+  avatar: {
+    width: '32px', height: '32px', borderRadius: '50%',
+    background: '#E11D48', color: '#fff', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px',
+    flexShrink: 0,
+  },
+  chipName: { fontSize: '13px', fontWeight: 700, color: '#f1f5f9' },
+  chipRole: { fontSize: '11px', color: '#64748b' },
+  signOutBtn: {
+    background: 'none', border: 'none', color: '#64748b',
+    fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: '8px 12px',
+    textAlign: 'left', borderRadius: '8px', transition: 'color 0.15s',
+  },
+
+  // Main
+  main: { flex: 1, overflowY: 'auto' },
+  content: { maxWidth: '800px', margin: '0 auto', padding: '48px 40px' },
+  pageHeader: { marginBottom: '40px' },
+  greeting: { fontSize: '32px', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-1px', marginBottom: '8px' },
+  greetingSub: { fontSize: '15px', color: '#64748b' },
+  pageTitle: { fontSize: '28px', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.5px', marginBottom: '8px' },
+  pageSub: { fontSize: '15px', color: '#64748b', lineHeight: 1.6, maxWidth: '540px' },
+
+  // Stats
+  statRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '40px' },
+  statCard: {
+    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '16px', padding: '24px',
+  },
+  statValue: { fontSize: '36px', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-1px', marginBottom: '4px' },
+  statValueSmall: { fontSize: '18px', letterSpacing: '-0.5px', marginTop: '6px' },
+  statLabel: { fontSize: '13px', fontWeight: 700, color: '#94a3b8', marginBottom: '4px' },
+  statSub: { fontSize: '12px', color: '#475569' },
+
+  // Sections
+  section: { marginTop: '40px' },
+  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
+  sectionTitle: { fontSize: '16px', fontWeight: 700, color: '#f1f5f9' },
+  sectionAction: {
+    background: 'none', border: '1px solid rgba(225,29,72,0.3)', color: '#E11D48',
+    fontSize: '13px', fontWeight: 600, padding: '6px 14px', borderRadius: '999px', cursor: 'pointer',
+  },
+
+  // List
+  list: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  listItem: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '16px 20px', borderRadius: '12px',
+    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+  },
+  listItemLeft: { display: 'flex', alignItems: 'flex-start', gap: '12px' },
+  listItemTitle: { fontSize: '14px', fontWeight: 600, color: '#e2e8f0', marginBottom: '4px' },
+  listItemMeta: { fontSize: '12px', color: '#475569' },
+  statusDot: { width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, marginTop: '5px' },
+  aiSummaryChip: {
+    fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', marginBottom: '4px',
+    padding: '3px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px',
+    display: 'inline-block', marginTop: '2px',
+  },
+  convAvatar: {
+    width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)',
+    color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontWeight: 800, fontSize: '14px', flexShrink: 0,
+  },
+  chevron: { color: '#475569', fontSize: '20px' },
+
+  // Match form
+  matchCard: {
+    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '20px', padding: '32px', marginBottom: '32px',
+  },
+  matchCardHeader: { marginBottom: '24px' },
+  aiTag: {
+    display: 'inline-block', fontSize: '11px', fontWeight: 700, letterSpacing: '2px',
+    textTransform: 'uppercase', color: '#E11D48', background: 'rgba(225,29,72,0.1)',
+    border: '1px solid rgba(225,29,72,0.2)', padding: '4px 10px', borderRadius: '999px',
+    marginBottom: '16px',
+  },
+  matchCardTitle: { fontSize: '20px', fontWeight: 800, color: '#f1f5f9', marginBottom: '8px', letterSpacing: '-0.5px' },
+  matchCardSub: { fontSize: '14px', color: '#64748b', lineHeight: 1.6 },
+  textarea: {
+    width: '100%', padding: '16px', border: '1.5px solid rgba(255,255,255,0.1)',
+    borderRadius: '14px', fontSize: '15px', color: '#e2e8f0',
+    background: 'rgba(255,255,255,0.04)', outline: 'none', resize: 'vertical',
+    fontFamily: "'Inter', sans-serif", lineHeight: 1.6, boxSizing: 'border-box',
+  },
+  charCount: { fontSize: '12px', color: '#475569', textAlign: 'right', marginTop: '6px', marginBottom: '16px' },
+  errorText: { color: '#E11D48', fontSize: '13px', fontWeight: 600, marginBottom: '12px' },
+  howItWorks: {
+    marginTop: '28px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)',
+  },
+  howTitle: { fontSize: '12px', fontWeight: 700, color: '#475569', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '16px' },
+  howSteps: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  howStep: { display: 'flex', alignItems: 'flex-start', gap: '12px' },
+  howNum: {
+    width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(225,29,72,0.15)',
+    color: '#E11D48', fontSize: '11px', fontWeight: 800,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  howText: { fontSize: '13px', color: '#64748b', lineHeight: 1.5, paddingTop: '3px' },
+
+  // Success
+  successCard: {
+    background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)',
+    borderRadius: '20px', padding: '48px 32px', textAlign: 'center', marginBottom: '32px',
+  },
+  successIcon: {
+    width: '48px', height: '48px', borderRadius: '50%',
+    background: 'rgba(34,197,94,0.15)', color: '#22c55e',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '20px', fontWeight: 800, margin: '0 auto 20px',
+  },
+  successTitle: { fontSize: '20px', fontWeight: 800, color: '#f1f5f9', marginBottom: '8px' },
+  successText: { fontSize: '14px', color: '#64748b', lineHeight: 1.6, maxWidth: '400px', margin: '0 auto 24px' },
+
+  // Empty state
+  emptyState: {
+    textAlign: 'center', padding: '64px 32px',
+    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '20px',
+  },
+  emptyIcon: { fontSize: '32px', marginBottom: '16px', color: '#334155' },
+  emptyTitle: { fontSize: '18px', fontWeight: 700, color: '#94a3b8', marginBottom: '8px' },
+  emptyDesc: { fontSize: '14px', color: '#475569', maxWidth: '320px', margin: '0 auto 24px', lineHeight: 1.6 },
+
+  // Shared
+  btnRed: {
+    background: '#E11D48', color: '#fff', border: 'none',
+    borderRadius: '999px', padding: '14px 28px', fontSize: '15px', fontWeight: 700,
+    cursor: 'pointer', boxShadow: '0 4px 15px rgba(225,29,72,0.25)', display: 'inline-block',
+  },
+};
 </file>
 
 <file path="app/lib/utils.ts">
@@ -293,6 +1486,188 @@ import { twMerge } from 'tailwind-merge';
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+</file>
+
+<file path="app/login/page.tsx">
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../lib/supabase';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ email: '', password: '' });
+
+  const handle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError('');
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: form.email,
+      password: form.password,
+    });
+
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+
+    router.push(profile?.role === 'mentor' ? '/dashboard/mentor' : '/dashboard/student');
+    setLoading(false);
+  };
+
+  return (
+    <main style={{ minHeight: '100vh', background: '#0d0d0d', position: 'relative', overflow: 'hidden' }}>
+      <style>{`
+        .login-title { font-size: 52px; }
+        .login-card { padding: 40px; }
+        @media (max-width: 768px) {
+          .login-title { font-size: 36px !important; letter-spacing: -1px !important; }
+          .login-card { padding: 24px !important; }
+        }
+      `}</style>
+
+      {/* Blobs — identical to join page */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', top: '-10%', left: '-15%',
+          width: '60vw', height: '60vw', maxWidth: '700px', maxHeight: '700px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(120,0,25,0.55) 0%, transparent 65%)',
+          animation: 'blobMove1 8s ease-in-out infinite alternate',
+          filter: 'blur(40px)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-15%', right: '-10%',
+          width: '55vw', height: '55vw', maxWidth: '600px', maxHeight: '600px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(90,0,18,0.45) 0%, transparent 65%)',
+          animation: 'blobMove2 11s ease-in-out infinite alternate',
+          filter: 'blur(50px)',
+        }} />
+        <div style={{
+          position: 'absolute', top: '35%', right: '15%',
+          width: '40vw', height: '40vw', maxWidth: '400px', maxHeight: '400px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(160,0,35,0.3) 0%, transparent 65%)',
+          animation: 'blobMove3 7s ease-in-out infinite alternate',
+          filter: 'blur(60px)',
+        }} />
+      </div>
+
+      {/* Header */}
+      <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '48px 20px 0' }}>
+        <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', marginBottom: '32px' }}>
+          <div style={{ width: '8px', height: '20px', background: '#E11D48', borderRadius: '2px' }} />
+          <span style={{ fontWeight: 800, fontSize: '16px', color: '#fff' }}>My Medicine Route</span>
+        </a>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            background: 'rgba(225,29,72,0.15)', border: '1px solid rgba(225,29,72,0.3)',
+            color: '#f87171', fontSize: '12px', fontWeight: 700,
+            padding: '6px 16px', borderRadius: '999px',
+          }}>
+            <span style={{ width: '6px', height: '6px', background: '#E11D48', borderRadius: '50%', display: 'inline-block' }} />
+            Enrollment is open
+          </div>
+        </div>
+
+        <h1 className="login-title" style={{ fontWeight: 800, color: '#fff', letterSpacing: '-2px', marginBottom: '12px' }}>
+          Welcome back
+        </h1>
+        <p style={{ fontSize: '17px', color: '#94a3b8', maxWidth: '400px', margin: '0 auto' }}>
+          Log in to access your dashboard and continue your research journey.
+        </p>
+      </div>
+
+      {/* Card */}
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: '480px', margin: '32px auto 80px', padding: '0 20px' }}>
+        <div className="login-card" style={{
+          background: 'rgba(20,20,22,0.85)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+        }}>
+          <form onSubmit={submit}>
+            <div style={{ display: 'grid', gap: '18px', marginBottom: '8px' }}>
+              <div>
+                <label style={labelStyle}>Email address</label>
+                <input name="email" type="email" required value={form.email}
+                  onChange={handle} style={inp} placeholder="your@email.com" />
+              </div>
+              <div>
+                <label style={labelStyle}>Password</label>
+                <input name="password" type="password" required value={form.password}
+                  onChange={handle} style={inp} placeholder="Your password" />
+              </div>
+            </div>
+
+            {error && <p style={errStyle}>{error}</p>}
+
+            <button type="submit" disabled={loading} style={{
+              width: '100%', marginTop: '24px',
+              background: loading ? 'rgba(255,255,255,0.06)' : '#E11D48',
+              color: loading ? '#475569' : '#fff',
+              border: 'none', borderRadius: '999px',
+              padding: '16px', fontSize: '16px', fontWeight: 700,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: loading ? 'none' : '0 4px 15px rgba(225,29,72,0.3)',
+              transition: 'all 0.2s',
+            }}>
+              {loading ? 'Logging in...' : 'Log in →'}
+            </button>
+          </form>
+
+          <p style={{ textAlign: 'center', fontSize: '14px', color: '#475569', marginTop: '24px' }}>
+            Don't have an account?{' '}
+            <a href="/join" style={{ color: '#E11D48', fontWeight: 700, textDecoration: 'none' }}>
+              Join the network
+            </a>
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '11px', fontWeight: 700,
+  color: '#64748b', marginBottom: '8px',
+  letterSpacing: '0.08em', textTransform: 'uppercase',
+};
+
+const inp: React.CSSProperties = {
+  width: '100%', padding: '13px 16px',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: '12px', fontSize: '15px',
+  color: '#e2e8f0', background: 'rgba(255,255,255,0.05)',
+  outline: 'none', fontFamily: "'Inter', sans-serif",
+  boxSizing: 'border-box',
+};
+
+const errStyle: React.CSSProperties = {
+  color: '#f87171', fontSize: '13px', fontWeight: 600,
+  marginTop: '12px', textAlign: 'center',
+};
 </file>
 
 <file path="CLAUDE.md">
@@ -320,14 +1695,73 @@ const eslintConfig = defineConfig([
 export default eslintConfig;
 </file>
 
-<file path="next.config.ts">
-import type { NextConfig } from "next";
+<file path="middleware.ts">
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-const nextConfig: NextConfig = {
-  /* config options here */
+export async function middleware(request: NextRequest) {
+  const response = NextResponse.next();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const path = request.nextUrl.pathname;
+
+  // Not logged in — redirect to login
+  if (!user && path.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Logged in — block access to login/join
+  if (user && (path === '/login' || path === '/join')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const dest = profile?.role === 'mentor' ? '/dashboard/mentor' : '/dashboard/student';
+    return NextResponse.redirect(new URL(dest, request.url));
+  }
+
+  // Role guard — mentor trying to access student dashboard and vice versa
+  if (user && path.startsWith('/dashboard')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.role === 'mentor' && path.startsWith('/dashboard/student')) {
+      return NextResponse.redirect(new URL('/dashboard/mentor', request.url));
+    }
+    if (profile?.role === 'student' && path.startsWith('/dashboard/mentor')) {
+      return NextResponse.redirect(new URL('/dashboard/student', request.url));
+    }
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/login', '/join'],
 };
-
-export default nextConfig;
 </file>
 
 <file path="postcss.config.mjs">
@@ -445,178 +1879,128 @@ next-env.d.ts
 .env*.local
 </file>
 
-<file path="app/components/FallingPattern.tsx">
-'use client';
-import { motion } from 'framer-motion';
+<file path="app/api/send-confirmation/route.ts">
+// app/api/send-confirmation/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 
-type FallingPatternProps = {
-  color?: string;
-  backgroundColor?: string;
-  duration?: number;
-  blurIntensity?: string;
-  density?: number;
-  style?: React.CSSProperties;
-};
+const FROM = 'My Medicine Route <noreply@mymedicineroute.org>';
 
-export function FallingPattern({
-  color = 'rgba(225,29,72,0.9)',
-  backgroundColor = 'transparent',
-  duration = 600,
-  blurIntensity = '0.3em',
-  density = 1,
-  style,
-}: FallingPatternProps) {
-  const generateBackgroundImage = () => {
-    const patterns = [
-      `radial-gradient(4px 100px at 0px 235px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 235px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 117.5px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 252px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 252px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 126px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 150px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 150px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 75px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 253px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 253px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 126.5px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 204px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 204px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 102px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 134px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 134px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 67px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 179px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 179px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 89.5px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 299px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 299px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 149.5px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 215px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 215px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 107.5px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 281px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 281px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 140.5px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 158px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 158px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 79px, ${color} 100%, transparent 150%)`,
-      `radial-gradient(4px 100px at 0px 210px, ${color}, transparent)`,
-      `radial-gradient(4px 100px at 300px 210px, ${color}, transparent)`,
-      `radial-gradient(1.5px 1.5px at 150px 105px, ${color} 100%, transparent 150%)`,
-    ];
-    return patterns.join(', ');
-  };
-
-  const backgroundSizes = '300px 235px, 300px 235px, 300px 235px, 300px 252px, 300px 252px, 300px 252px, 300px 150px, 300px 150px, 300px 150px, 300px 253px, 300px 253px, 300px 253px, 300px 204px, 300px 204px, 300px 204px, 300px 134px, 300px 134px, 300px 134px, 300px 179px, 300px 179px, 300px 179px, 300px 299px, 300px 299px, 300px 299px, 300px 215px, 300px 215px, 300px 215px, 300px 281px, 300px 281px, 300px 281px, 300px 158px, 300px 158px, 300px 158px, 300px 210px, 300px 210px, 300px 210px';
-  const startPositions = '0px 220px, 3px 220px, 151.5px 337.5px, 25px 24px, 28px 24px, 176.5px 150px, 50px 16px, 53px 16px, 201.5px 91px, 75px 224px, 78px 224px, 226.5px 230.5px, 100px 19px, 103px 19px, 251.5px 121px, 125px 120px, 128px 120px, 276.5px 187px, 150px 31px, 153px 31px, 301.5px 120.5px, 175px 235px, 178px 235px, 326.5px 384.5px, 200px 121px, 203px 121px, 351.5px 228.5px, 225px 224px, 228px 224px, 376.5px 364.5px, 250px 26px, 253px 26px, 401.5px 105px, 275px 75px, 278px 75px, 426.5px 180px';
-  const endPositions = '0px 6800px, 3px 6800px, 151.5px 6917.5px, 25px 13632px, 28px 13632px, 176.5px 13758px, 50px 5416px, 53px 5416px, 201.5px 5491px, 75px 17175px, 78px 17175px, 226.5px 17301.5px, 100px 5119px, 103px 5119px, 251.5px 5221px, 125px 8428px, 128px 8428px, 276.5px 8495px, 150px 9876px, 153px 9876px, 301.5px 9965.5px, 175px 13391px, 178px 13391px, 326.5px 13540.5px, 200px 14741px, 203px 14741px, 351.5px 14848.5px, 225px 18770px, 228px 18770px, 376.5px 18910.5px, 250px 5082px, 253px 5082px, 401.5px 5161px, 275px 6375px, 278px 6375px, 426.5px 6480px';
-
-  return (
-    <div style={{
-      position: 'absolute',
-      inset: 0,
-      width: '100%',
-      height: '100%',
-      zIndex: 0,
-      pointerEvents: 'none',
-      ...style,
-    }}>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        style={{ width: '100%', height: '100%' }}
-      >
-        <motion.div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage: generateBackgroundImage(),
-            backgroundSize: backgroundSizes,
-            backgroundRepeat: 'repeat',
-            willChange: 'background-position',
-          }}
-          variants={{
-            initial: { backgroundPosition: startPositions },
-            animate: {
-              backgroundPosition: [startPositions, endPositions],
-              transition: { duration, ease: 'linear', repeat: Infinity },
-            },
-          }}
-          initial="initial"
-          animate="animate"
-        />
-      </motion.div>
-    </div>
-  );
+function studentHTML(name: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#0f0f11;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0f11;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background:#141416;padding:24px 40px;border-radius:16px 16px 0 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <table cellpadding="0" cellspacing="0"><tr>
+              <td style="width:10px;height:24px;background:#E11D48;border-radius:2px;"></td>
+              <td style="padding-left:10px;font-size:17px;font-weight:800;color:#f1f5f9;letter-spacing:-0.3px;">My Medicine Route</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#141416;padding:48px 40px 40px;">
+            <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#E11D48;letter-spacing:3px;text-transform:uppercase;">Welcome</p>
+            <h1 style="margin:0 0 24px;font-size:32px;font-weight:800;color:#f1f5f9;letter-spacing:-1px;line-height:1.15;">Hey ${name}, you're in!</h1>
+            <p style="margin:0 0 16px;font-size:16px;color:#94a3b8;line-height:1.7;">
+              Your application to <strong style="color:#f1f5f9;">My Medicine Route</strong> has been received. We're currently in our founding phase — building the network, confirming mentors, and preparing our first cohort.
+            </p>
+            <p style="margin:0 0 36px;font-size:16px;color:#94a3b8;line-height:1.7;">
+              We'll reach out personally once we're ready to match you. Until then, follow us on Instagram to stay updated on our progress.
+            </p>
+            <a href="https://instagram.com/mymedicineroute" style="display:inline-block;background:#E11D48;color:#ffffff;font-size:15px;font-weight:700;padding:14px 28px;border-radius:999px;text-decoration:none;">
+              Follow @mymedicineroute
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#141416;padding:24px 40px;border-top:1px solid rgba(255,255,255,0.06);border-radius:0 0 16px 16px;">
+            <p style="margin:0;font-size:13px;color:#475569;line-height:1.6;">
+              Founded by Gasser Mohamed &amp; Co-founder Hussain KR · Bahrain · 2026 ·
+              <a href="mailto:mymedicineroute@gmail.com" style="color:#475569;text-decoration:none;">mymedicineroute@gmail.com</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
-</file>
 
-<file path="app/components/Footer.tsx">
-export default function Footer() {
-  return (
-    <footer style={{
-      padding: '48px 64px', display: 'flex', justifyContent: 'space-between',
-      alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)',
-      fontSize: '14px', color: '#94a3b8',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div style={{ width: '8px', height: '16px', background: '#E11D48', borderRadius: '2px' }} />
-        <span style={{ fontWeight: 800, color: '#f1f5f9' }}>My Medicine Route</span>
-      </div>
-      <span>Founded by Gasser · Bahrain · 2025</span>
-      <a href="mailto:mymedicineroute@gmail.com" style={{ color: 'inherit', textDecoration: 'none' }}>
-        mymedicineroute@gmail.com
-      </a>
-    </footer>
-  );
+function mentorHTML(name: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#0f0f11;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0f11;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background:#141416;padding:24px 40px;border-radius:16px 16px 0 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <table cellpadding="0" cellspacing="0"><tr>
+              <td style="width:10px;height:24px;background:#E11D48;border-radius:2px;"></td>
+              <td style="padding-left:10px;font-size:17px;font-weight:800;color:#f1f5f9;letter-spacing:-0.3px;">My Medicine Route</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#141416;padding:48px 40px 40px;">
+            <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#E11D48;letter-spacing:3px;text-transform:uppercase;">Mentor Application</p>
+            <h1 style="margin:0 0 24px;font-size:32px;font-weight:800;color:#f1f5f9;letter-spacing:-1px;line-height:1.15;">Thank you, ${name}</h1>
+            <p style="margin:0 0 16px;font-size:16px;color:#94a3b8;line-height:1.7;">
+              Your application to mentor with <strong style="color:#f1f5f9;">My Medicine Route</strong> has been received. We're in our founding phase — confirming our first cohort of mentors and preparing student matches.
+            </p>
+            <p style="margin:0 0 36px;font-size:16px;color:#94a3b8;line-height:1.7;">
+              We'll be in touch personally with next steps. Your support at this stage means everything to us.
+            </p>
+            <a href="https://instagram.com/mymedicineroute" style="display:inline-block;background:#E11D48;color:#ffffff;font-size:15px;font-weight:700;padding:14px 28px;border-radius:999px;text-decoration:none;">
+              Follow @mymedicineroute
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#141416;padding:24px 40px;border-top:1px solid rgba(255,255,255,0.06);border-radius:0 0 16px 16px;">
+            <p style="margin:0;font-size:13px;color:#475569;line-height:1.6;">
+              Founded by Gasser Mohamed &amp; Co-founder Hussain KR · Bahrain · 2026 ·
+              <a href="mailto:mymedicineroute@gmail.com" style="color:#475569;text-decoration:none;">mymedicineroute@gmail.com</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
-</file>
 
-<file path="app/components/Hero.tsx">
-'use client';
-import { Waves } from './Waves';
+export async function POST(req: NextRequest) {
+  const { role, name, email } = await req.json();
 
-export default function Hero() {
-  return (
-    <div style={{ position: 'relative', overflow: 'hidden' }}>
-      <Waves strokeColor="rgba(225,29,72,0.2)" backgroundColor="transparent" />
-      <section style={{
-        textAlign: 'center',
-        padding: '120px 24px 100px',
-        maxWidth: '900px',
-        margin: '0 auto',
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        <div className="animate-reveal">
-          <div className="badge-red" style={{ marginBottom: '32px' }}>
-            <span className="pulse-dot" />
-            Student-Founded · Bahrain
-          </div>
-          <h1 style={{
-            fontSize: '76px', fontWeight: 800, lineHeight: 1,
-            letterSpacing: '-4px', marginBottom: '32px', color: '#f1f5f9',
-          }}>
-            Your route into{' '}
-            <span style={{ color: '#E11D48' }}>medical research</span>
-            {' '}starts here
-          </h1>
-          <p style={{
-            fontSize: '21px', color: '#94a3b8', lineHeight: 1.6,
-            maxWidth: '620px', margin: '0 auto 48px', fontWeight: 400,
-          }}>
-            Connect with expert mentors to conduct real, guided research projects — designed for high school students, built for the future.
-          </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <a href="/join" className="btn-red" style={{ padding: '18px 40px', fontSize: '16px' }}>Join as Student</a>
-            <a href="/join" className="btn-ghost" style={{ padding: '18px 40px', fontSize: '16px' }}>Become a Mentor</a>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: FROM,
+      to: email,
+      subject: role === 'student'
+        ? 'Your application to My Medicine Route is in'
+        : 'Your mentor application to My Medicine Route is in',
+      html: role === 'student' ? studentHTML(name) : mentorHTML(name),
+    }),
+  });
+
+  if (!res.ok) {
+    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }
 </file>
 
@@ -643,240 +2027,82 @@ export default function useScrollReveal() {
 }
 </file>
 
-<file path="app/join/page.tsx">
-'use client';
+<file path="app/layout.tsx">
+import { Inter } from 'next/font/google'
+import './globals.css'
 
-import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
+})
 
-export default function JoinPage() {
-  const [role, setRole] = useState<'student' | 'mentor'>('student');
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    school: '',
-    grade: '',
-    interest: '',
-    roleTitle: '',
-    institution: '',
-    hours: '',
-    why: '',
-  });
-
-  const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (role === 'student') {
-        await supabase.from('students').insert({
-          full_name: form.fullName,
-          email: form.email,
-          school: form.school,
-          grade: form.grade,
-          interest: form.interest,
-          why: form.why,
-        });
-      } else {
-        await supabase.from('mentors').insert({
-          full_name: form.fullName,
-          email: form.email,
-          role: form.roleTitle,
-          institution: form.institution,
-          hours: form.hours,
-          why: form.why,
-        });
-      }
-      setSubmitted(true);
-    } catch (err) {
-      alert('Something went wrong. Please try again.');
-    }
-    setLoading(false);
-  };
-
-  if (submitted) {
-    return (
-      <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafaf8' }}>
-        <div style={{ textAlign: 'center', padding: '60px 40px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '24px' }}>🎉</div>
-          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0d0d0d', marginBottom: '16px', letterSpacing: '-1px' }}>
-            You're in!
-          </h1>
-          <p style={{ fontSize: '17px', color: '#64748b', maxWidth: '400px', lineHeight: 1.6 }}>
-            Thanks for applying to My Medicine Route. We'll be in touch at <strong>{form.email}</strong> within a few days.
-          </p>
-          <a href="/" style={{
-            display: 'inline-block', marginTop: '40px',
-            background: '#E11D48', color: 'white', padding: '14px 32px',
-            borderRadius: '999px', textDecoration: 'none', fontWeight: 600, fontSize: '15px',
-          }}>
-            Back to home
-          </a>
-        </div>
-      </main>
-    );
-  }
-
-  return (
-    <main style={{ minHeight: '100vh', background: '#fafaf8' }}>
-
-      <div style={{
-        background: 'radial-gradient(circle at 30% 50%, #2a0810 0%, #0d0d0d 70%)',
-        padding: '60px 24px 80px',
-        textAlign: 'center'
-      }}>
-        <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', marginBottom: '40px' }}>
-          <div style={{ width: '8px', height: '20px', background: '#E11D48', borderRadius: '2px' }} />
-          <span style={{ fontWeight: 800, fontSize: '16px', color: '#fff' }}>My Medicine Route</span>
-        </a>
-        <h1 style={{ fontSize: '48px', fontWeight: 800, color: '#fff', letterSpacing: '-2px', marginBottom: '16px' }}>
-          Join the network
-        </h1>
-        <p style={{ fontSize: '17px', color: '#94a3b8', maxWidth: '480px', margin: '0 auto' }}>
-          Whether you're a student ready to research or a mentor ready to guide — there's a place for you here.
-        </p>
-      </div>
-
-      <div style={{ maxWidth: '600px', margin: '-40px auto 80px', padding: '0 24px' }}>
-        <div style={{ background: '#fff', borderRadius: '24px', padding: '48px', border: '1px solid #f1f5f9', boxShadow: '0 8px 40px rgba(0,0,0,0.06)' }}>
-
-          <div style={{ display: 'flex', background: '#f8f8f6', borderRadius: '12px', padding: '4px', marginBottom: '40px' }}>
-            {(['student', 'mentor'] as const).map(r => (
-              <button
-                key={r}
-                onClick={() => setRole(r)}
-                style={{
-                  flex: 1, padding: '12px', border: 'none', cursor: 'pointer',
-                  borderRadius: '10px', fontWeight: 700, fontSize: '14px',
-                  transition: 'all 0.2s',
-                  background: role === r ? '#E11D48' : 'transparent',
-                  color: role === r ? '#fff' : '#64748b',
-                }}
-              >
-                {r === 'student' ? 'I am a Student' : 'I am a Mentor'}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={submit}>
-            <div style={{ display: 'grid', gap: '20px' }}>
-
-              <div>
-                <label style={labelStyle}>Full name</label>
-                <input name="fullName" required onChange={handle} style={inputStyle} placeholder="Your full name" />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Email address</label>
-                <input name="email" type="email" required onChange={handle} style={inputStyle} placeholder="your@email.com" />
-              </div>
-
-              {role === 'student' && (
-                <>
-                  <div>
-                    <label style={labelStyle}>School</label>
-                    <input name="school" required onChange={handle} style={inputStyle} placeholder="Your school name" />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Grade</label>
-                    <select name="grade" required onChange={handle} style={inputStyle}>
-                      <option value="">Select your grade</option>
-                      {['9', '10', '11', '12'].map(g => (
-                        <option key={g} value={g}>Grade {g}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Area of interest in medicine</label>
-                    <select name="interest" required onChange={handle} style={inputStyle}>
-                      <option value="">Select an area</option>
-                      {['General medicine', 'Surgery', 'Neurology', 'Cardiology', 'Oncology', 'Pediatrics', 'Public health', 'Research & data', 'Other'].map(i => (
-                        <option key={i} value={i}>{i}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Why do you want to join?</label>
-                    <textarea name="why" required onChange={handle} rows={4} style={{ ...inputStyle, resize: 'none' }} placeholder="Tell us what drives your interest in medical research..." />
-                  </div>
-                </>
-              )}
-
-              {role === 'mentor' && (
-                <>
-                  <div>
-                    <label style={labelStyle}>Current role</label>
-                    <input name="roleTitle" required onChange={handle} style={inputStyle} placeholder="e.g. Medical student, Doctor, Researcher" />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Institution</label>
-                    <input name="institution" required onChange={handle} style={inputStyle} placeholder="e.g. University, Hospital, Clinic..." />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Hours available per week</label>
-                    <select name="hours" required onChange={handle} style={inputStyle}>
-                      <option value="">Select availability</option>
-                      {['Less than 1 hour', '1–2 hours', '2–4 hours', '4+ hours'].map(h => (
-                        <option key={h} value={h}>{h}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Why do you want to mentor?</label>
-                    <textarea name="why" required onChange={handle} rows={4} style={{ ...inputStyle, resize: 'none' }} placeholder="Tell us what motivates you to guide the next generation..." />
-                  </div>
-                </>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  background: loading ? '#f1f5f9' : '#E11D48',
-                  color: loading ? '#94a3b8' : '#fff',
-                  border: 'none', borderRadius: '999px',
-                  padding: '18px', fontSize: '16px', fontWeight: 700,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s', marginTop: '8px',
-                  boxShadow: loading ? 'none' : '0 4px 15px rgba(225,29,72,0.25)',
-                }}
-              >
-                {loading ? 'Submitting...' : role === 'student' ? 'Apply as Student →' : 'Apply as Mentor →'}
-              </button>
-
-            </div>
-          </form>
-        </div>
-      </div>
-    </main>
-  );
+export const metadata = {
+  title: 'My Medicine Route',
+  description: 'Student-founded medical research network. Connecting high school students with mentors in Bahrain.',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 }
 
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '13px',
-  fontWeight: 700,
-  color: '#0d0d0d',
-  marginBottom: '8px',
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
+    </html>
+  )
+}
+</file>
+
+<file path="app/lib/supabase.ts">
+import { createBrowserClient } from '@supabase/ssr';
+
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+</file>
+
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-XSS-Protection', value: '1; mode=block' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+      {
+        source: '/(.*)\\.(ico|png|jpg|jpeg|svg|webp|woff2)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+    ];
+  },
 };
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '14px 16px',
-  border: '1.5px solid #e8e6df',
-  borderRadius: '12px',
-  fontSize: '15px',
-  color: '#0d0d0d',
-  background: '#fafaf8',
-  outline: 'none',
-  fontFamily: "'Inter', sans-serif",
-};
+export default nextConfig;
 </file>
 
 <file path="tsconfig.json">
@@ -1304,6 +2530,96 @@ export default function ECGSection() {
 }
 </file>
 
+<file path="app/components/FallingPattern.tsx">
+'use client';
+
+type FallingPatternProps = {
+  color?: string;
+  backgroundColor?: string;
+  duration?: number;
+  blurIntensity?: string;
+  density?: number;
+  style?: React.CSSProperties;
+};
+
+export function FallingPattern({
+  color = 'rgba(225,29,72,0.9)',
+  style,
+}: FallingPatternProps) {
+  const lines = [
+    { left: '5%', delay: '0s', height: '120px', duration: '8s' },
+    { left: '12%', delay: '1.2s', height: '80px', duration: '10s' },
+    { left: '20%', delay: '0.4s', height: '140px', duration: '7s' },
+    { left: '28%', delay: '2s', height: '100px', duration: '9s' },
+    { left: '36%', delay: '0.8s', height: '60px', duration: '11s' },
+    { left: '44%', delay: '1.6s', height: '130px', duration: '8s' },
+    { left: '52%', delay: '0.2s', height: '90px', duration: '10s' },
+    { left: '60%', delay: '2.4s', height: '110px', duration: '7s' },
+    { left: '68%', delay: '1s', height: '75px', duration: '9s' },
+    { left: '76%', delay: '0.6s', height: '145px', duration: '8s' },
+    { left: '84%', delay: '1.8s', height: '85px', duration: '11s' },
+    { left: '92%', delay: '0.3s', height: '120px', duration: '9s' },
+  ];
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      width: '100%',
+      height: '100%',
+      zIndex: 0,
+      pointerEvents: 'none',
+      overflow: 'hidden',
+      ...style,
+    }}>
+      <style>{`
+        @keyframes fall {
+          0% { transform: translateY(-200px); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 0.6; }
+          100% { transform: translateY(110%); opacity: 0; }
+        }
+      `}</style>
+      {lines.map((line, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            left: line.left,
+            top: 0,
+            width: '1.5px',
+            height: line.height,
+            background: `linear-gradient(to bottom, transparent, ${color}, transparent)`,
+            animation: `fall ${line.duration} linear ${line.delay} infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+</file>
+
+<file path="app/components/Footer.tsx">
+export default function Footer() {
+  return (
+    <footer style={{
+      padding: '48px 64px', display: 'flex', justifyContent: 'space-between',
+      alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)',
+      fontSize: '14px', color: '#94a3b8',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ width: '8px', height: '16px', background: '#E11D48', borderRadius: '2px' }} />
+        <span style={{ fontWeight: 800, color: '#f1f5f9' }}>My Medicine Route</span>
+      </div>
+      <span>Founded by Gasser Mohamed & Co-Founder Hussain KR · Bahrain · 2026</span>
+      <a href="mailto:mymedicineroute@gmail.com" style={{ color: 'inherit', textDecoration: 'none' }}>
+        mymedicineroute@gmail.com
+      </a>
+    </footer>
+  );
+}
+</file>
+
 <file path="app/components/Navbar.tsx">
 'use client';
 import { useState } from 'react';
@@ -1405,6 +2721,120 @@ export default function Navbar() {
 }
 </file>
 
+<file path="app/components/Hero.tsx">
+'use client';
+import { useState, useEffect } from 'react';
+import { Waves } from './Waves';
+
+const WORDS = ['here', 'now', 'today', 'free'];
+
+function MorphingWord() {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [displayText, setDisplayText] = useState(WORDS[0]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentIndex(prev => {
+        const nextIndex = (prev + 1) % WORDS.length;
+        const currentWord = WORDS[prev];
+        const nextWord = WORDS[nextIndex];
+        const morphDuration = 600;
+        const steps = 16;
+        let step = 0;
+
+        const morph = setInterval(() => {
+          step++;
+          const progress = step / steps;
+          if (progress < 0.5) {
+            const charCount = Math.floor(currentWord.length * (1 - progress * 2));
+            setDisplayText(currentWord.slice(0, charCount) || '\u00A0');
+          } else {
+            const charCount = Math.floor(nextWord.length * ((progress - 0.5) * 2));
+            setDisplayText(nextWord.slice(0, charCount) || '\u00A0');
+          }
+          if (step >= steps) {
+            clearInterval(morph);
+            setDisplayText(nextWord);
+          }
+        }, morphDuration / steps);
+
+        return nextIndex;
+      });
+    }, 2800);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <span style={{
+      color: '#E11D48',
+      display: 'inline-block',
+      minWidth: '120px',
+      position: 'relative',
+    }}>
+      {displayText}
+      <span style={{
+        display: 'inline-block',
+        width: '3px',
+        height: '0.85em',
+        background: '#E11D48',
+        marginLeft: '3px',
+        verticalAlign: 'middle',
+        borderRadius: '2px',
+        animation: 'blink-caret 1s step-end infinite',
+      }} />
+      <style>{`
+        @keyframes blink-caret {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+    </span>
+  );
+}
+
+export default function Hero() {
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden' }}>
+      <Waves strokeColor="rgba(225,29,72,0.2)" backgroundColor="transparent" />
+      <section style={{
+        textAlign: 'center',
+        padding: '120px 24px 100px',
+        maxWidth: '900px',
+        margin: '0 auto',
+        position: 'relative',
+        zIndex: 1,
+      }}>
+        <div className="animate-reveal">
+          <div className="badge-red" style={{ marginBottom: '32px' }}>
+            <span className="pulse-dot" />
+            Student-Founded · Bahrain
+          </div>
+          <h1 style={{
+            fontSize: '76px', fontWeight: 800, lineHeight: 1,
+            letterSpacing: '-4px', marginBottom: '32px', color: '#f1f5f9',
+          }}>
+            Your route into{' '}
+            <span style={{ color: '#E11D48' }}>medical research</span>
+            {' '}starts <MorphingWord />
+          </h1>
+          <p style={{
+            fontSize: '21px', color: '#94a3b8', lineHeight: 1.6,
+            maxWidth: '620px', margin: '0 auto 48px', fontWeight: 400,
+          }}>
+            Connect with expert mentors to conduct real, guided research projects — designed for high school students, built for the future.
+          </p>
+          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+            <a href="/join" className="btn-red" style={{ padding: '18px 40px', fontSize: '16px' }}>Join as Student</a>
+            <a href="/join" className="btn-ghost" style={{ padding: '18px 40px', fontSize: '16px' }}>Become a Mentor</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+</file>
+
 <file path="app/components/OurGoal.tsx">
 'use client';
 import { FallingPattern } from './FallingPattern';
@@ -1431,7 +2861,7 @@ export default function OurGoal() {
         <p className="sr sr-delay-2" style={{ fontSize: '18px', color: '#94a3b8', lineHeight: 1.7, maxWidth: '620px', margin: '0 auto 64px' }}>
           My Medicine Route is a student-founded nonprofit with one mission — give every high schooler in Bahrain a real shot at medical research before university. No connections needed. No experience required.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
           {[
             { num: '50+', label: 'Students involved', desc: 'High schoolers across Bahrain gaining real research experience', delay: 'sr-delay-2' },
             { num: '5+', label: 'Projects completed', desc: 'Real studies published and documented in our archive', delay: 'sr-delay-3' },
@@ -1533,7 +2963,7 @@ export default function Safety() {
             ))}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           {rules.map(item => (
             <div key={item.title} className={`sr ${item.delay} glass-card`} style={{ borderRadius: '16px', padding: '28px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
               <div style={{
@@ -1741,7 +3171,7 @@ export default function WhatWeDo() {
         <h2 className="sr sr-delay-1" style={{ fontSize: '42px', fontWeight: 800, textAlign: 'center', marginBottom: '64px', letterSpacing: '-1.5px', color: '#f1f5f9' }}>
           Real research experience.<br />Before university.
         </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
           {items.map(item => (
             <div key={item.title} className={`sr ${item.delay} glass-card`} style={{ borderRadius: '20px', padding: '32px' }}>
               <div style={{ 
@@ -1868,7 +3298,7 @@ export default function WhyItMatters() {
           Every year, thousands of Bahraini students passionate about medicine hit the same invisible wall. My Medicine Route tears it down.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '80px' }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '80px' }}>
           {problems.map(item => (
             <div key={item.title} className={`sr ${item.delay} glass-card`} style={{
               borderRadius: '24px', padding: '40px',
@@ -1911,7 +3341,7 @@ export default function WhyItMatters() {
           <h3 style={{ fontSize: '32px', fontWeight: 800, color: '#fff', letterSpacing: '-1px', marginBottom: '32px' }}>
             My Medicine Route gives you the entry point you were never given
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '32px' }}>
+          <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '32px' }}>
             {[
               { label: 'Real projects', desc: 'Not textbook exercises. Real studies with real data.' },
               { label: 'Real mentors', desc: 'Medical students and doctors guiding you every step.' },
@@ -1931,7 +3361,7 @@ export default function WhyItMatters() {
 </file>
 
 <file path="app/globals.css">
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Font loaded via next/font in layout.tsx — no external request needed */
 
 * {
   margin: 0;
@@ -1951,15 +3381,21 @@ export default function WhyItMatters() {
   --text-secondary: #94a3b8;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: 'Inter', -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text-primary);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @keyframes reveal {
-  from { opacity: 0; transform: translateY(30px); }
+  from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -1978,14 +3414,8 @@ body {
   100% { transform: scale(1); }
 }
 
-.scroll-reveal {
-  opacity: 1;
-  transform: translateY(0);
-  animation: reveal 0.7s ease-out both;
-}
-
 .animate-reveal {
-  animation: reveal 0.8s ease-out forwards;
+  animation: reveal 0.6s ease-out forwards;
 }
 
 .nav-item {
@@ -2003,7 +3433,7 @@ body {
   border-radius: 999px;
   text-decoration: none;
   font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   box-shadow: 0 4px 15px rgba(225, 29, 72, 0.25);
   display: inline-block;
 }
@@ -2021,7 +3451,7 @@ body {
   text-decoration: none;
   font-weight: 700;
   border: 1.5px solid rgba(255,255,255,0.15);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   display: inline-block;
 }
 .btn-ghost:hover {
@@ -2033,13 +3463,12 @@ body {
 .glass-card {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 .glass-card:hover {
-  transform: translateY(-8px);
+  transform: translateY(-6px);
   border-color: rgba(225, 29, 72, 0.3);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-  background: rgba(255,255,255,0.06);
+  box-shadow: 0 16px 32px rgba(0,0,0,0.25);
 }
 
 .badge-red {
@@ -2074,18 +3503,62 @@ body {
   filter: grayscale(1) invert(1) contrast(1.2) brightness(1.1);
 }
 
+/* Scroll reveal */
+.sr {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.sr.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.sr-delay-1 { transition-delay: 0.08s; }
+.sr-delay-2 { transition-delay: 0.16s; }
+.sr-delay-3 { transition-delay: 0.24s; }
+.sr-delay-4 { transition-delay: 0.32s; }
+
 /* Nav */
 .nav-desktop { display: flex; }
 .nav-mobile { display: none !important; }
 
-/* Mobile */
+/* ─── MOBILE ─────────────────────────────────────────── */
 @media (max-width: 768px) {
   .nav-desktop { display: none !important; }
   .nav-mobile { display: flex !important; }
   nav { padding: 0 20px !important; }
+
   section { padding: 60px 20px !important; }
-  h1 { font-size: 40px !important; letter-spacing: -2px !important; }
-  h2 { font-size: 26px !important; }
+
+  h1 {
+    font-size: 38px !important;
+    letter-spacing: -2px !important;
+    line-height: 1.1 !important;
+  }
+  h2 { font-size: 28px !important; letter-spacing: -1px !important; }
+  h3 { font-size: 22px !important; }
+
+  .hero-btns {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+  .hero-btns a {
+    width: 100% !important;
+    max-width: 280px !important;
+    text-align: center !important;
+  }
+
+  .glass-card { padding: 24px !important; }
+
+  .mobile-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobile-grid-2col {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
   footer {
     flex-direction: column !important;
     gap: 12px !important;
@@ -2094,20 +3567,12 @@ body {
   }
 }
 
-/* Scroll reveal */
-.sr {
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity 0.65s cubic-bezier(0.4,0,0.2,1), transform 0.65s cubic-bezier(0.4,0,0.2,1);
+/* ─── SMALL MOBILE ───────────────────────────────────── */
+@media (max-width: 480px) {
+  h1 { font-size: 32px !important; letter-spacing: -1.5px !important; }
+  h2 { font-size: 24px !important; }
+  .badge-red { font-size: 11px !important; }
 }
-.sr.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-.sr-delay-1 { transition-delay: 0.1s; }
-.sr-delay-2 { transition-delay: 0.2s; }
-.sr-delay-3 { transition-delay: 0.3s; }
-.sr-delay-4 { transition-delay: 0.4s; }
 
 @keyframes blobMove1 {
   from { transform: translate(0px, 0px) scale(1); }
@@ -2120,6 +3585,428 @@ body {
 @keyframes blobMove3 {
   from { transform: translate(0px, 0px) scale(1); }
   to   { transform: translate(40px, -50px) scale(0.95); }
+}
+</file>
+
+<file path="app/join/page.tsx">
+'use client';
+
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
+
+type Role = 'student' | 'mentor';
+type Step = 'details' | 'account' | 'done';
+
+export default function JoinPage() {
+  const [role, setRole] = useState<Role>('student');
+  const [step, setStep] = useState<Step>('details');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const [form, setForm] = useState({
+    fullName: '', email: '', password: '',
+    school: '', grade: '', interest: '', why: '',
+    roleTitle: '', institution: '', hours: '', bio: '',
+    expertiseTags: [] as string[],
+  });
+
+  const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setError('');
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const toggleTag = (tag: string) => {
+    setForm(prev => ({
+      ...prev,
+      expertiseTags: prev.expertiseTags.includes(tag)
+        ? prev.expertiseTags.filter(t => t !== tag)
+        : [...prev.expertiseTags, tag],
+    }));
+  };
+
+  const submitAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+        options: { data: { full_name: form.fullName, role } },
+      });
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Signup failed');
+      const uid = authData.user.id;
+      if (role === 'student') {
+        const { error: pe } = await supabase.from('student_profiles').insert({
+          id: uid, school: form.school, grade: form.grade, interest: form.interest, why: form.why,
+        });
+        if (pe) throw pe;
+      } else {
+        const { error: pe } = await supabase.from('mentor_profiles').insert({
+          id: uid, bio: form.bio, expertise_tags: form.expertiseTags,
+          institution: form.institution, role_title: form.roleTitle, hours_per_week: form.hours,
+        });
+        if (pe) throw pe;
+      }
+      setStep('done');
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong.');
+    }
+    setLoading(false);
+  };
+
+  const expertiseOptions = [
+    'General medicine', 'Surgery', 'Neurology', 'Cardiology',
+    'Oncology', 'Pediatrics', 'Public health', 'Research & data', 'Psychiatry',
+  ];
+
+  if (step === 'done') {
+    return (
+      <main style={{ minHeight: '100vh', background: '#0d0d0d', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+        <Blobs />
+        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '60px 24px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '24px' }}>🎉</div>
+          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#fff', marginBottom: '16px', letterSpacing: '-1px' }}>You're in!</h1>
+          <p style={{ fontSize: '17px', color: '#94a3b8', maxWidth: '400px', lineHeight: 1.6, marginBottom: '32px' }}>
+            Check <strong style={{ color: '#f1f5f9' }}>{form.email}</strong> to confirm your address, then log in.
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href="/login" style={btnRed}>Go to Login</a>
+            <a href="/" style={btnGhost}>Back to Home</a>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main style={{ minHeight: '100vh', background: '#0d0d0d', position: 'relative', overflow: 'hidden' }}>
+      <style>{`
+        .join-title { font-size: 52px; }
+        .join-card { padding: 40px; }
+        .join-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 768px) {
+          .join-title { font-size: 36px !important; letter-spacing: -1px !important; }
+          .join-card { padding: 24px !important; }
+          .join-grid-2 { grid-template-columns: 1fr !important; gap: 18px !important; }
+        }
+      `}</style>
+
+      <Blobs />
+
+      {/* Header */}
+      <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '48px 20px 0' }}>
+        <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', marginBottom: '32px' }}>
+          <div style={{ width: '8px', height: '20px', background: '#E11D48', borderRadius: '2px' }} />
+          <span style={{ fontWeight: 800, fontSize: '16px', color: '#fff' }}>My Medicine Route</span>
+        </a>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            background: 'rgba(225,29,72,0.15)', border: '1px solid rgba(225,29,72,0.3)',
+            color: '#f87171', fontSize: '12px', fontWeight: 700,
+            padding: '6px 16px', borderRadius: '999px',
+          }}>
+            <span style={{ width: '6px', height: '6px', background: '#E11D48', borderRadius: '50%', display: 'inline-block' }} />
+            Enrollment is open
+          </div>
+        </div>
+
+        <h1 className="join-title" style={{ fontWeight: 800, color: '#fff', letterSpacing: '-2px', marginBottom: '12px' }}>
+          Join the network
+        </h1>
+        <p style={{ fontSize: '17px', color: '#94a3b8', maxWidth: '480px', margin: '0 auto' }}>
+          {step === 'details'
+            ? "Student ready to research, or a mentor ready to guide — there's a place for you."
+            : 'One last step — create your account to access your dashboard.'}
+        </p>
+      </div>
+
+      {/* Card */}
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: '600px', margin: '32px auto 80px', padding: '0 20px' }}>
+        <div className="join-card" style={{
+          background: 'rgba(20,20,22,0.85)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+        }}>
+
+          {/* STEP: DETAILS */}
+          {step === 'details' && (
+            <>
+              <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '4px', marginBottom: '32px' }}>
+                {(['student', 'mentor'] as Role[]).map(r => (
+                  <button key={r} onClick={() => { setRole(r); setError(''); }} style={{
+                    flex: 1, padding: '12px', border: 'none', cursor: 'pointer',
+                    borderRadius: '10px', fontWeight: 700, fontSize: '14px', transition: 'all 0.2s',
+                    background: role === r ? '#E11D48' : 'transparent',
+                    color: role === r ? '#fff' : '#64748b',
+                  }}>
+                    {r === 'student' ? 'I am a Student' : 'I am a Mentor'}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gap: '18px' }}>
+                <Field label="Full name">
+                  <input name="fullName" required value={form.fullName} onChange={handle} style={inp} placeholder="Your full name" />
+                </Field>
+
+                {role === 'student' && (<>
+                  <Field label="School">
+                    <input name="school" required value={form.school} onChange={handle} style={inp} placeholder="Your school name" />
+                  </Field>
+                  <div className="join-grid-2">
+                    <Field label="Grade">
+                      <select name="grade" required value={form.grade} onChange={handle} style={inp}>
+                        <option value="">Select...</option>
+                        {['9', '10', '11', '12'].map(g => <option key={g} value={g}>Grade {g}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Area of interest">
+                      <select name="interest" required value={form.interest} onChange={handle} style={inp}>
+                        <option value="">Select...</option>
+                        {expertiseOptions.map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="Why do you want to join?">
+                    <textarea name="why" required value={form.why} onChange={handle}
+                      rows={4} style={{ ...inp, resize: 'none' }}
+                      placeholder="What drives your interest in medical research..." />
+                  </Field>
+                </>)}
+
+                {role === 'mentor' && (<>
+                  <div className="join-grid-2">
+                    <Field label="Current role">
+                      <input name="roleTitle" required value={form.roleTitle} onChange={handle} style={inp} placeholder="e.g. Medical student" />
+                    </Field>
+                    <Field label="Institution">
+                      <input name="institution" required value={form.institution} onChange={handle} style={inp} placeholder="e.g. RCSI Bahrain" />
+                    </Field>
+                  </div>
+                  <Field label="Hours available per week">
+                    <select name="hours" required value={form.hours} onChange={handle} style={inp}>
+                      <option value="">Select availability</option>
+                      {['Less than 1 hour', '1–2 hours', '2–4 hours', '4+ hours'].map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Expertise areas">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                      {expertiseOptions.map(tag => (
+                        <button key={tag} type="button" onClick={() => toggleTag(tag)} style={{
+                          padding: '7px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 600,
+                          cursor: 'pointer', transition: 'all 0.15s',
+                          background: form.expertiseTags.includes(tag) ? 'rgba(225,29,72,0.15)' : 'rgba(255,255,255,0.06)',
+                          color: form.expertiseTags.includes(tag) ? '#f87171' : '#64748b',
+                          border: form.expertiseTags.includes(tag) ? '1px solid rgba(225,29,72,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                        }}>{tag}</button>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Bio">
+                    <textarea name="bio" value={form.bio} onChange={handle}
+                      rows={4} style={{ ...inp, resize: 'none' }}
+                      placeholder="Tell students about your background..." />
+                  </Field>
+                </>)}
+              </div>
+
+              {error && <p style={errStyle}>{error}</p>}
+
+              <button onClick={() => {
+                if (!form.fullName) { setError('Full name is required'); return; }
+                if (role === 'student' && (!form.school || !form.grade || !form.interest || !form.why)) { setError('Please fill in all fields'); return; }
+                if (role === 'mentor' && (!form.roleTitle || !form.institution || !form.hours)) { setError('Please fill in all fields'); return; }
+                setError(''); setStep('account');
+              }} style={{ ...submitBtn, marginTop: '24px' }}>
+                {role === 'student' ? 'Apply as Student →' : 'Apply as Mentor →'}
+              </button>
+
+              <p style={{ textAlign: 'center', fontSize: '14px', color: '#475569', marginTop: '20px' }}>
+                Already have an account?{' '}
+                <a href="/login" style={{ color: '#E11D48', fontWeight: 700, textDecoration: 'none' }}>Log in</a>
+              </p>
+            </>
+          )}
+
+          {/* STEP: ACCOUNT */}
+          {step === 'account' && (
+            <>
+              <button onClick={() => setStep('details')} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#64748b', fontSize: '14px', fontWeight: 600,
+                padding: 0, marginBottom: '28px', display: 'block',
+              }}>← Back</button>
+
+              <div style={{
+                display: 'inline-block', fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em',
+                color: '#f87171', background: 'rgba(225,29,72,0.12)',
+                border: '1px solid rgba(225,29,72,0.25)', padding: '5px 14px',
+                borderRadius: '999px', marginBottom: '28px',
+              }}>
+                {role === 'student' ? '🎓 Student Account' : '🩺 Mentor Account'}
+              </div>
+
+              <form onSubmit={submitAccount}>
+                <div style={{ display: 'grid', gap: '18px' }}>
+                  <Field label="Email address">
+                    <input name="email" type="email" required value={form.email} onChange={handle} style={inp} placeholder="your@email.com" />
+                  </Field>
+                  <Field label="Password">
+                    <input name="password" type="password" required value={form.password} onChange={handle} style={inp} placeholder="At least 8 characters" minLength={8} />
+                  </Field>
+                </div>
+                <p style={{ fontSize: '12px', color: '#475569', marginTop: '16px', lineHeight: 1.6 }}>
+                  By creating an account you agree to use My Medicine Route for educational research only under mentor supervision.
+                </p>
+                {error && <p style={errStyle}>{error}</p>}
+                <button type="submit" disabled={loading} style={{
+                  ...submitBtn, marginTop: '24px',
+                  opacity: loading ? 0.6 : 1,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  background: loading ? 'rgba(255,255,255,0.08)' : '#E11D48',
+                  color: loading ? '#475569' : '#fff',
+                  boxShadow: loading ? 'none' : '0 4px 15px rgba(225,29,72,0.3)',
+                }}>
+                  {loading ? 'Submitting...' : `Apply as ${role === 'student' ? 'Student' : 'Mentor'} →`}
+                </button>
+              </form>
+
+              <p style={{ textAlign: 'center', fontSize: '14px', color: '#475569', marginTop: '20px' }}>
+                Already have an account?{' '}
+                <a href="/login" style={{ color: '#E11D48', fontWeight: 700, textDecoration: 'none' }}>Log in</a>
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Blobs() {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+      <div style={{
+        position: 'absolute', top: '-10%', left: '-15%',
+        width: '60vw', height: '60vw', maxWidth: '700px', maxHeight: '700px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(120,0,25,0.55) 0%, transparent 65%)',
+        animation: 'blobMove1 8s ease-in-out infinite alternate',
+        filter: 'blur(40px)',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-15%', right: '-10%',
+        width: '55vw', height: '55vw', maxWidth: '600px', maxHeight: '600px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(90,0,18,0.45) 0%, transparent 65%)',
+        animation: 'blobMove2 11s ease-in-out infinite alternate',
+        filter: 'blur(50px)',
+      }} />
+      <div style={{
+        position: 'absolute', top: '35%', right: '15%',
+        width: '40vw', height: '40vw', maxWidth: '400px', maxHeight: '400px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(160,0,35,0.3) 0%, transparent 65%)',
+        animation: 'blobMove3 7s ease-in-out infinite alternate',
+        filter: 'blur(60px)',
+      }} />
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{
+        display: 'block', fontSize: '11px', fontWeight: 700,
+        color: '#64748b', marginBottom: '8px',
+        letterSpacing: '0.08em', textTransform: 'uppercase',
+      }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inp: React.CSSProperties = {
+  width: '100%', padding: '13px 16px',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: '12px', fontSize: '15px',
+  color: '#e2e8f0', background: 'rgba(255,255,255,0.05)',
+  outline: 'none', fontFamily: "'Inter', sans-serif",
+  boxSizing: 'border-box',
+};
+
+const submitBtn: React.CSSProperties = {
+  width: '100%', background: '#E11D48', color: '#fff', border: 'none',
+  borderRadius: '999px', padding: '16px', fontSize: '16px', fontWeight: 700,
+  cursor: 'pointer', transition: 'all 0.2s',
+  boxShadow: '0 4px 15px rgba(225,29,72,0.3)',
+};
+
+const errStyle: React.CSSProperties = {
+  color: '#f87171', fontSize: '13px', fontWeight: 600,
+  marginTop: '12px', textAlign: 'center',
+};
+
+const btnRed: React.CSSProperties = {
+  background: '#E11D48', color: 'white', padding: '14px 32px',
+  borderRadius: '999px', textDecoration: 'none', fontWeight: 600,
+  fontSize: '15px', display: 'inline-block',
+};
+
+const btnGhost: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.06)', color: '#e2e8f0', padding: '14px 32px',
+  borderRadius: '999px', textDecoration: 'none', fontWeight: 600,
+  fontSize: '15px', border: '1px solid rgba(255,255,255,0.1)', display: 'inline-block',
+};
+</file>
+
+<file path="package.json">
+{
+  "name": "mymedicineroute",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@paper-design/shaders-react": "^0.0.74",
+    "@react-three/fiber": "^9.5.0",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.103.0",
+    "clsx": "^2.1.1",
+    "firebase": "^12.11.0",
+    "framer-motion": "^12.38.0",
+    "next": "16.2.2",
+    "next-themes": "^0.4.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "simplex-noise": "^4.0.3",
+    "tailwind-merge": "^3.5.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "^0.183.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
 }
 </file>
 
@@ -2151,46 +4038,6 @@ export default function Home() {
       <Footer />
     </main>
   );
-}
-</file>
-
-<file path="package.json">
-{
-  "name": "mymedicineroute",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@paper-design/shaders-react": "^0.0.74",
-    "@react-three/fiber": "^9.5.0",
-    "@supabase/supabase-js": "^2.103.0",
-    "clsx": "^2.1.1",
-    "firebase": "^12.11.0",
-    "framer-motion": "^12.38.0",
-    "next": "16.2.2",
-    "next-themes": "^0.4.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "simplex-noise": "^4.0.3",
-    "tailwind-merge": "^3.5.0",
-    "three": "^0.183.2"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/three": "^0.183.1",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.2",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
 }
 </file>
 

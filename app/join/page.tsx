@@ -38,26 +38,29 @@ export default function JoinPage() {
     setLoading(true);
     setError('');
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // All profile data passed as metadata — trigger handles the inserts
+      const { error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
-        options: { data: { full_name: form.fullName, role } },
+        options: {
+          data: {
+            full_name: form.fullName,
+            role,
+            // student fields
+            school: form.school,
+            grade: form.grade,
+            interest: form.interest,
+            why: form.why,
+            // mentor fields
+            role_title: form.roleTitle,
+            institution: form.institution,
+            hours_per_week: form.hours,
+            bio: form.bio,
+            expertise_tags: form.expertiseTags,
+          },
+        },
       });
       if (authError) throw authError;
-      if (!authData.user) throw new Error('Signup failed');
-      const uid = authData.user.id;
-      if (role === 'student') {
-        const { error: pe } = await supabase.from('student_profiles').insert({
-          id: uid, school: form.school, grade: form.grade, interest: form.interest, why: form.why,
-        });
-        if (pe) throw pe;
-      } else {
-        const { error: pe } = await supabase.from('mentor_profiles').insert({
-          id: uid, bio: form.bio, expertise_tags: form.expertiseTags,
-          institution: form.institution, role_title: form.roleTitle, hours_per_week: form.hours,
-        });
-        if (pe) throw pe;
-      }
       setStep('done');
     } catch (err: any) {
       setError(err.message || 'Something went wrong.');
@@ -110,7 +113,6 @@ export default function JoinPage() {
           <div style={{ width: '8px', height: '20px', background: '#E11D48', borderRadius: '2px' }} />
           <span style={{ fontWeight: 800, fontSize: '16px', color: '#fff' }}>My Medicine Route</span>
         </a>
-
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
@@ -122,7 +124,6 @@ export default function JoinPage() {
             Enrollment is open
           </div>
         </div>
-
         <h1 className="join-title" style={{ fontWeight: 800, color: '#fff', letterSpacing: '-2px', marginBottom: '12px' }}>
           Join the network
         </h1>
@@ -136,10 +137,8 @@ export default function JoinPage() {
       {/* Card */}
       <div style={{ position: 'relative', zIndex: 1, maxWidth: '600px', margin: '32px auto 80px', padding: '0 20px' }}>
         <div className="join-card" style={{
-          background: 'rgba(20,20,22,0.85)',
-          backdropFilter: 'blur(20px)',
-          borderRadius: '20px',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(20,20,22,0.85)', backdropFilter: 'blur(20px)',
+          borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)',
           boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
         }}>
 
@@ -233,7 +232,7 @@ export default function JoinPage() {
                 if (role === 'mentor' && (!form.roleTitle || !form.institution || !form.hours)) { setError('Please fill in all fields'); return; }
                 setError(''); setStep('account');
               }} style={{ ...submitBtn, marginTop: '24px' }}>
-                {role === 'student' ? 'Apply as Student →' : 'Apply as Mentor →'}
+                Continue →
               </button>
 
               <p style={{ textAlign: 'center', fontSize: '14px', color: '#475569', marginTop: '20px' }}>
@@ -282,7 +281,7 @@ export default function JoinPage() {
                   color: loading ? '#475569' : '#fff',
                   boxShadow: loading ? 'none' : '0 4px 15px rgba(225,29,72,0.3)',
                 }}>
-                  {loading ? 'Submitting...' : `Apply as ${role === 'student' ? 'Student' : 'Mentor'} →`}
+                  {loading ? 'Creating account...' : `Apply as ${role === 'student' ? 'Student' : 'Mentor'} →`}
                 </button>
               </form>
 
@@ -303,27 +302,21 @@ function Blobs() {
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
       <div style={{
         position: 'absolute', top: '-10%', left: '-15%',
-        width: '60vw', height: '60vw', maxWidth: '700px', maxHeight: '700px',
-        borderRadius: '50%',
+        width: '60vw', height: '60vw', maxWidth: '700px', maxHeight: '700px', borderRadius: '50%',
         background: 'radial-gradient(circle, rgba(120,0,25,0.55) 0%, transparent 65%)',
-        animation: 'blobMove1 8s ease-in-out infinite alternate',
-        filter: 'blur(40px)',
+        animation: 'blobMove1 8s ease-in-out infinite alternate', filter: 'blur(40px)',
       }} />
       <div style={{
         position: 'absolute', bottom: '-15%', right: '-10%',
-        width: '55vw', height: '55vw', maxWidth: '600px', maxHeight: '600px',
-        borderRadius: '50%',
+        width: '55vw', height: '55vw', maxWidth: '600px', maxHeight: '600px', borderRadius: '50%',
         background: 'radial-gradient(circle, rgba(90,0,18,0.45) 0%, transparent 65%)',
-        animation: 'blobMove2 11s ease-in-out infinite alternate',
-        filter: 'blur(50px)',
+        animation: 'blobMove2 11s ease-in-out infinite alternate', filter: 'blur(50px)',
       }} />
       <div style={{
         position: 'absolute', top: '35%', right: '15%',
-        width: '40vw', height: '40vw', maxWidth: '400px', maxHeight: '400px',
-        borderRadius: '50%',
+        width: '40vw', height: '40vw', maxWidth: '400px', maxHeight: '400px', borderRadius: '50%',
         background: 'radial-gradient(circle, rgba(160,0,35,0.3) 0%, transparent 65%)',
-        animation: 'blobMove3 7s ease-in-out infinite alternate',
-        filter: 'blur(60px)',
+        animation: 'blobMove3 7s ease-in-out infinite alternate', filter: 'blur(60px)',
       }} />
     </div>
   );
@@ -332,11 +325,7 @@ function Blobs() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{
-        display: 'block', fontSize: '11px', fontWeight: 700,
-        color: '#64748b', marginBottom: '8px',
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-      }}>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
         {label}
       </label>
       {children}
@@ -346,33 +335,28 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '13px 16px',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: '12px', fontSize: '15px',
-  color: '#e2e8f0', background: 'rgba(255,255,255,0.05)',
-  outline: 'none', fontFamily: "'Inter', sans-serif",
-  boxSizing: 'border-box',
+  border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px',
+  fontSize: '15px', color: '#e2e8f0', background: 'rgba(255,255,255,0.05)',
+  outline: 'none', fontFamily: "'Inter', sans-serif", boxSizing: 'border-box',
 };
 
 const submitBtn: React.CSSProperties = {
   width: '100%', background: '#E11D48', color: '#fff', border: 'none',
   borderRadius: '999px', padding: '16px', fontSize: '16px', fontWeight: 700,
-  cursor: 'pointer', transition: 'all 0.2s',
-  boxShadow: '0 4px 15px rgba(225,29,72,0.3)',
+  cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(225,29,72,0.3)',
 };
 
 const errStyle: React.CSSProperties = {
-  color: '#f87171', fontSize: '13px', fontWeight: 600,
-  marginTop: '12px', textAlign: 'center',
+  color: '#f87171', fontSize: '13px', fontWeight: 600, marginTop: '12px', textAlign: 'center',
 };
 
 const btnRed: React.CSSProperties = {
   background: '#E11D48', color: 'white', padding: '14px 32px',
-  borderRadius: '999px', textDecoration: 'none', fontWeight: 600,
-  fontSize: '15px', display: 'inline-block',
+  borderRadius: '999px', textDecoration: 'none', fontWeight: 600, fontSize: '15px', display: 'inline-block',
 };
 
 const btnGhost: React.CSSProperties = {
   background: 'rgba(255,255,255,0.06)', color: '#e2e8f0', padding: '14px 32px',
-  borderRadius: '999px', textDecoration: 'none', fontWeight: 600,
-  fontSize: '15px', border: '1px solid rgba(255,255,255,0.1)', display: 'inline-block',
+  borderRadius: '999px', textDecoration: 'none', fontWeight: 600, fontSize: '15px',
+  border: '1px solid rgba(255,255,255,0.1)', display: 'inline-block',
 };

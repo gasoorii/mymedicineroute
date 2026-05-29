@@ -9,6 +9,7 @@ import Safety from './components/Safety';
 import WhatWeDo from './components/WhatWeDo';
 import CTA from './components/CTA';
 import Footer from './components/Footer';
+import MentorPopup from './components/MentorPopup';
 
 export default function Home() {
   useScrollReveal();
@@ -23,6 +24,7 @@ export default function Home() {
       <WhatWeDo />
       <CTA />
       <Footer />
+      <MentorPopup />
     </main>
   );
 }

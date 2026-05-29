@@ -8,6 +8,7 @@ export default function Navbar() {
     { label: 'Our Goal', href: '#our-goal' },
     { label: 'Why it matters', href: '#why' },
     { label: 'Safety', href: '#safety' },
+    { label: 'Mentors', href: '/mentors' },
   ];
 
   return (
